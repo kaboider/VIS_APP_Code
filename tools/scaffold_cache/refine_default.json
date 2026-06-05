@@ -1,0 +1,255 @@
+{
+  "command": "npx -y create-refine-app@latest {project} -e finefoods-client",
+  "description": "Refine app (using finefoods-client example as a representative scaffold)",
+  "elapsed_s": 12.1,
+  "file_count": 60,
+  "files": {
+    ".gitignore": {
+      "sha256": "cabf29d1a730845cec729919c196f1031bbf08b8ab690472c1368104cad9e5fc",
+      "size": 414
+    },
+    ".npmrc": {
+      "sha256": "a093bb2fed59d699b7f9a62a5203cc196054c624e9c39c6d908c9e7db5dd2464",
+      "size": 22
+    },
+    "README.md": {
+      "sha256": "577c72cc3ba6b8e927a522ffb2a5cae246b703b5bdc0de7a7c04d00c13966745",
+      "size": 1924
+    },
+    "netlify.toml": {
+      "sha256": "09e99d0d9080e2cb6d36b3faf4e160fb7b8d04624e218048b8b0f706b4f3113a",
+      "size": 47
+    },
+    "next-env.d.ts": {
+      "sha256": "9dd9d642cdb87d4d5b3173217e0c45429b3e47a6f5cf5fb0ead6c644ec5fed01",
+      "size": 228
+    },
+    "next.config.mjs": {
+      "sha256": "1e3206cb200e264fdddb4dbb2e4772daebc839fdbc94b78316d74892a0de6fa2",
+      "size": 92
+    },
+    "package.json": {
+      "sha256": "5fbfa8c868e1591ed8682b6d7e8c10dcbad2f986306bf6c8fd5d3c9e56ddfe8a",
+      "size": 907
+    },
+    "postcss.config.js": {
+      "sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf",
+      "size": 83
+    },
+    "public/favicon.ico": {
+      "sha256": "387f87713ce22ca8de5b3cd06f4e4dc9c514008696e6d252db15dccb2c6d50fa",
+      "size": 7406
+    },
+    "public/images/plate.png": {
+      "sha256": "15c4e33bea598d8a782d315f51eaec1f362b833f3a98404c4ee43708c28ec434",
+      "size": 37322
+    },
+    "public/robots.txt": {
+      "sha256": "331ea9090db0c9f6f597bd9840fd5b171830f6e0b3ba1cb24dfa91f0c95aedc1",
+      "size": 26
+    },
+    "src/app/categories/[id]/layout.tsx": {
+      "sha256": "5f7b28f4d156b91e48b5c43b8ae8a93872627af41d3a108f6d7bac0011dec595",
+      "size": 1886
+    },
+    "src/app/categories/[id]/page.tsx": {
+      "sha256": "564f0b712677884ec01cbbabe29a264f3be5ac011ff5dc23f7cdd945d14b62ed",
+      "size": 1724
+    },
+    "src/app/icon.ico": {
+      "sha256": "387f87713ce22ca8de5b3cd06f4e4dc9c514008696e6d252db15dccb2c6d50fa",
+      "size": 7406
+    },
+    "src/app/layout.tsx": {
+      "sha256": "899df9ff2aaa18118d387d324fd28ad04a4ff7ca12242e5c0b7c46ea707db846",
+      "size": 1370
+    },
+    "src/app/not-found.tsx": {
+      "sha256": "cb9e41e1c01c4e7e12b3a224853209429886843d87ad24e9d38b41b5c301c657",
+      "size": 211
+    },
+    "src/app/orders/[id]/page.tsx": {
+      "sha256": "bb5a90a7ec2c0d73ebb4a848a8e27a743f78516b98e27c586bacd6f934ae6db8",
+      "size": 1111
+    },
+    "src/app/page.tsx": {
+      "sha256": "e588dd533dc5cd4aabcf6fec6ac1616eb0d21be06af4d6041b7fb07e354af06e",
+      "size": 121
+    },
+    "src/components/categories/index.ts": {
+      "sha256": "994cf10a1ca75ca194ee327b22ef16e04377622b2be0498887177cbb084aa01d",
+      "size": 50
+    },
+    "src/components/categories/nav-links/index.tsx": {
+      "sha256": "606985bef913c82e2139553a73337360ffb1b18c485d0961c029a924922646d2",
+      "size": 1355
+    },
+    "src/components/icons/BasketIcon.tsx": {
+      "sha256": "7f256581f5fbfd11388b6e5e53bcbae1855c553b17cc3f063f417758612491f0",
+      "size": 753
+    },
+    "src/components/icons/ChevronDownIcon.tsx": {
+      "sha256": "c10d6f5c258a97bca4adf703b50de1ec49ef38091693b328a98f5f2eb994ecce",
+      "size": 490
+    },
+    "src/components/icons/ChevronLeftIcon.tsx": {
+      "sha256": "750c6bd20ea6374e496118c189582f20fd03ac018265474d6f6fbdc7c3ceebbc",
+      "size": 491
+    },
+    "src/components/icons/ChevronRightIcon.tsx": {
+      "sha256": "c8395ae799fd3a605feb76aa73ae94f618a53e5c205f8b3f2735ecaf49a8caa6",
+      "size": 493
+    },
+    "src/components/icons/ChevronUpIcon.tsx": {
+      "sha256": "3287f9a73dbb820e960ed4d57d1490de8e7ef78b52ee140fbd37a96b98809fa4",
+      "size": 485
+    },
+    "src/components/icons/CloseIcon.tsx": {
+      "sha256": "f6a2b94a5bb7ec00553a680bd72a83286e03b5354bcce1b52b403258815eaf40",
+      "size": 512
+    },
+    "src/components/icons/DividerVerticalIcon.tsx": {
+      "sha256": "ad98763951e3a842163252bcb19ec1c2cb6a174f15d9a3d87b8e243d74151493",
+      "size": 404
+    },
+    "src/components/icons/FastMotocycleIcon.tsx": {
+      "sha256": "37ee851b94ccf679aa606e9a1cac402549320cdb36c11d71030b530ebf65aed3",
+      "size": 7493
+    },
+    "src/components/icons/FinefoodsIcon.tsx": {
+      "sha256": "9541844be103a4b2adb7fac3fc1f4c3f817912c2e606023db73ba572f481b945",
+      "size": 6346
+    },
+    "src/components/icons/MotorcycleIcon.tsx": {
+      "sha256": "93bfbc19f5988bc28012a961435f1ff05fb832c475dd30b92aa79ce3c4542e4d",
+      "size": 2810
+    },
+    "src/components/icons/OrderIcon.tsx": {
+      "sha256": "6817e024bb122dca30c687e989f5a47d74df97affbf576b89c4323b9f060af88",
+      "size": 5847
+    },
+    "src/components/icons/PlusSquareIcon.tsx": {
+      "sha256": "73d6289a2c9b9698f150d62b2f9a11ccde15a8ddb197be548f4297fef2ae69a6",
+      "size": 596
+    },
+    "src/components/icons/RefineIcon.tsx": {
+      "sha256": "73c765304034e5a3738d45b52741a99bf64f755b67abd5c4982e9f7b7b673532",
+      "size": 3772
+    },
+    "src/components/icons/index.tsx": {
+      "sha256": "860fa972fb3f1cb4402a76a5cd0751d97ba6cba4a125a7027078be97fdc06c73",
+      "size": 790
+    },
+    "src/components/input/index.ts": {
+      "sha256": "e02fb10b4524db91e6fdc8bc3ee5f69ec99c177f35d0f35f4076b69d8398e71e",
+      "size": 40
+    },
+    "src/components/input/number/index.tsx": {
+      "sha256": "8e2d18e4a8f9ac113edc67b150a5fb75e2b93821dec708c299dfa469a370d858",
+      "size": 1145
+    },
+    "src/components/layout/footer.tsx": {
+      "sha256": "79f8ee174a02d5820d35f8342ad68deca852488ddb45d1ae8acd1ee75642bed7",
+      "size": 1941
+    },
+    "src/components/layout/header.tsx": {
+      "sha256": "4ddad92f3223059414632c4da645d277f647584679fd8e2233f07cc047e49741",
+      "size": 1276
+    },
+    "src/components/layout/index.ts": {
+      "sha256": "f69d45280d44947b6925c728d9a621ca92d519cb5c81fa8e42fbcdab8befaffc",
+      "size": 105
+    },
+    "src/components/layout/layout.tsx": {
+      "sha256": "5ffa8809d50fb696b8c41bf0f613038687b195f9b30a136b60ab73357b03cf20",
+      "size": 724
+    },
+    "src/components/orders/detail/index.tsx": {
+      "sha256": "175a130441b2247ead674884d5d80bfdfc6ed185692c1f6b393ae3ed3303e7dd",
+      "size": 4302
+    },
+    "src/components/orders/index.ts": {
+      "sha256": "47e5f029eb112ba60c3090f3300130107031f7041fb97e3ff583fab25ffd5707",
+      "size": 79
+    },
+    "src/components/orders/modal/index.tsx": {
+      "sha256": "e6813630ac8498a45ff809b8cd4e3908190c4840dcdb97d5d454bd00faeb3c0b",
+      "size": 4137
+    },
+    "src/components/products/table/index.ts": {
+      "sha256": "7d07bd3705575b13fa556d792772ff06f13b0bc9eb9e6b6959e468904cfc22e1",
+      "size": 93
+    },
+    "src/components/products/table/skeleton.tsx": {
+      "sha256": "22ec246548f369fdd677a6116798a52e090dade6e0f6a4999d69cbf455365696",
+      "size": 1394
+    },
+    "src/components/products/table/table.tsx": {
+      "sha256": "0031786e3c83233b51db9bc0c849b78ad05eec3344287e4d964cb3499d953fd6",
+      "size": 6124
+    },
+    "src/constants.ts": {
+      "sha256": "906f59d7e565c85acc06e7bb17546eb3078e7e5d805775f73ce44a155e948904",
+      "size": 477
+    },
+    "src/context/basketContextProvider.tsx": {
+      "sha256": "97843a630e4bcf8a152e5acda3fb6c4854f5695d1ceaacfd4147920b00b6f822",
+      "size": 3561
+    },
+    "src/context/index.ts": {
+      "sha256": "0d1389925f50ce5acd3170c514ab3d26ea7864791f0cb58d674cfddcd4018bb9",
+      "size": 87
+    },
+    "src/context/ordersModalContextProvider.tsx": {
+      "sha256": "e5133464870a34fa1a92b2185e63e00e1899787408370f99ccd1225f05f4b5ba",
+      "size": 615
+    },
+    "src/hooks/useBasketContext.ts": {
+      "sha256": "56b7e9b02bcf24cf59ca5315ef277b3aa6254295a8eee21a4cbfa36af201951a",
+      "size": 200
+    },
+    "src/hooks/useEventListener.ts": {
+      "sha256": "ee316dc287908f244f46029e17b4e664bde65a59da449856fd83e359c23a43e5",
+      "size": 1386
+    },
+    "src/hooks/useOnClickOutside.ts": {
+      "sha256": "c21703397c90a24da919c8c53c3aaadcf900a3274b9e78c1624221069def395b",
+      "size": 539
+    },
+    "src/hooks/useOrdersModalContext.ts": {
+      "sha256": "762a83b3a540ace40a76704cc0c516e2887d8cb7774bc526988d56838efe6ec7",
+      "size": 296
+    },
+    "src/providers/data-provider/client.ts": {
+      "sha256": "1e98a766ef84821a18bd14a9f7a3bc21f4136fe3d12bcafc334a46eae463716b",
+      "size": 177
+    },
+    "src/providers/data-provider/server.ts": {
+      "sha256": "a745743826502609066c68a4393573f2c41e6dfa092652b10bfe1a5e1cb7ea02",
+      "size": 162
+    },
+    "src/styles/globals.css": {
+      "sha256": "e6806b70b85d124a35eedb3fb30b87dc587de86be18b7b993f247f7e63a5302f",
+      "size": 379
+    },
+    "src/types/index.ts": {
+      "sha256": "5a9891e0575c2154d71a95ea334fa1165830054fa4b3e437a6a11f40e4a6672b",
+      "size": 1573
+    },
+    "tailwind.config.js": {
+      "sha256": "33388beafe83c2bd7ae19ab78091a57599f800737b5d4f329671380b32ee5c6f",
+      "size": 336
+    },
+    "tsconfig.json": {
+      "sha256": "6c953fbd3a490bb9c9fd9a5901303c2077f1e8578d4910231840e56a0e62e792",
+      "size": 665
+    }
+  },
+  "framework": "refine",
+  "generated_at": "2026-05-04T21:46:42.312722+00:00",
+  "key": "refine_default",
+  "match_patterns": [
+    "create refine-app@latest",
+    "create-refine-app@latest"
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "command": "npx -y sv create {project} --template minimal --types ts --no-add-ons --no-install",
+  "description": "SvelteKit minimal",
+  "elapsed_s": 1.5,
+  "file_count": 15,
+  "files": {
+    ".gitignore": {
+      "sha256": "d1aec8becdfa546cbb4ed193ffd576dd7f353c742cb9f361be4b2697ecefe992",
+      "size": 210
+    },
+    ".npmrc": {
+      "sha256": "7151cf397def0c2cb0ab65643701d27d335a72c90f775675b5f826bc7005818a",
+      "size": 19
+    },
+    ".vscode/extensions.json": {
+      "sha256": "613d3fbe180f7d0ef4381a7c5cd15e7ff5a7f35313cfe4d96b82c2215c3c796a",
+      "size": 49
+    },
+    "README.md": {
+      "sha256": "6e07d759d8a93a5e747d463915381864ee1dc3ac14cdbb3d78993514d4dab6e0",
+      "size": 955
+    },
+    "package.json": {
+      "sha256": "bc81a79f52e54ef2b940a911d52db5e7e9bab18fe80a61ce55cf66ba3fd2503d",
+      "size": 617
+    },
+    "src/app.d.ts": {
+      "sha256": "3d450fc2fc7b0f10b6a9493a682769aac34f8b612f0f5d1bc4845a7b0bfe9f0a",
+      "size": 274
+    },
+    "src/app.html": {
+      "sha256": "824aebe3df873b559437d5e9dbf97f09f35c3b006608950cb582bcfbeae85faa",
+      "size": 331
+    },
+    "src/lib/assets/favicon.svg": {
+      "sha256": "d7d9227f0fe5bfb4189fb6ba4dd9e2d524f6a1dfd02bd901c65330987675c0b3",
+      "size": 1569
+    },
+    "src/lib/index.ts": {
+      "sha256": "4beec0ade3bea5be651939b305bccf69d48506c74eda0a1a50a0dd6c79c4e91a",
+      "size": 75
+    },
+    "src/routes/+layout.svelte": {
+      "sha256": "ebd8d1fe186e66679a9f5627747a0d9aa04853505d70c9f00cbbc7333dabe3d5",
+      "size": 196
+    },
+    "src/routes/+page.svelte": {
+      "sha256": "9dd633ced2345cf3712ded48cdba85cb07933348909e5681a3d2d941627403c0",
+      "size": 131
+    },
+    "static/robots.txt": {
+      "sha256": "b033243267bcbdab84cb01e940811d6d77a894d78f0470faaf0eb43f8e4efcc9",
+      "size": 63
+    },
+    "svelte.config.js": {
+      "sha256": "adadcb7d17db3e0b6b3b1da3de2b0d9a08e7b29971b24f3eff7dce9d59cf450a",
+      "size": 679
+    },
+    "tsconfig.json": {
+      "sha256": "7a19bf2d57ef51ed3d7ddb0ed6ac3c4aa89025ab1cc2b0271132477905763134",
+      "size": 692
+    },
+    "vite.config.ts": {
+      "sha256": "57fab6695036bdec420fc24934ecc4cf5344ac2723a6ce0e2728a66ad96785b8",
+      "size": 144
+    }
+  },
+  "framework": "svelte",
+  "generated_at": "2026-05-04T21:42:22.664431+00:00",
+  "key": "svelte_default",
+  "match_patterns": [
+    "create svelte@latest",
+    "sv create"
+  ]
+}

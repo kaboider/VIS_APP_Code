@@ -1,0 +1,13 @@
+{
+  "command": "echo 'shadcn-init is run inside an existing project, not a primary scaffold; build script will skip.'",
+  "description": "shadcn/ui init (NOT a primary scaffold \u2014 runs inside an existing Next.js project to add components.json + utility files). Build script skips this entry; pattern is here only so detect_scaffold can flag overlapping files when used.",
+  "elapsed_s": 0.0,
+  "file_count": 0,
+  "files": {},
+  "framework": "shadcn",
+  "generated_at": "2026-05-04T21:49:21.079020+00:00",
+  "key": "shadcn_init",
+  "match_patterns": [
+    "shadcn@latest init"
+  ]
+}

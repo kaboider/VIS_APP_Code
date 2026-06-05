@@ -1,0 +1,326 @@
+{
+  "command": "npx -y create-next-app@latest {project} -e https://github.com/vercel/commerce --skip-install --use-npm",
+  "description": "Next.js + Vercel Commerce starter (full e-commerce template)",
+  "elapsed_s": 2.4,
+  "file_count": 78,
+  "files": {
+    ".env.example": {
+      "sha256": "66e9529c127ee7aea948775798c51f242da8dafac67b2e097eaf83299e99dc6b",
+      "size": 190
+    },
+    ".gitignore": {
+      "sha256": "6002200b38394195f11a3a707023d756bdd7c29e94db089847d6617e8acd4584",
+      "size": 417
+    },
+    ".vscode/launch.json": {
+      "sha256": "2b35a9a3292b4e6731a301e642898f1f55133a1196379d56d11483dcb012d4bb",
+      "size": 645
+    },
+    ".vscode/settings.json": {
+      "sha256": "06f5a4a74fbfa910370eb0eb26c45eb05f539083d7e06715368cbaedaf3b5fc0",
+      "size": 255
+    },
+    "README.md": {
+      "sha256": "72e18363efb465957de54d84cb975b2046a13a3167ce15efd917468aa745f3e3",
+      "size": 4979
+    },
+    "app/[page]/layout.tsx": {
+      "sha256": "e746f9f591830a02640c7c46b3cffa32d96da8b9cbdf9652d1e333a5d480e9b0",
+      "size": 294
+    },
+    "app/[page]/opengraph-image.tsx": {
+      "sha256": "a30d37533122179ab6bc2c86af950f09ab2676da27082eaaa741a65a469e44a4",
+      "size": 312
+    },
+    "app/[page]/page.tsx": {
+      "sha256": "8df454e7bfb1f79f27a10aa5fc6c626683024f9dab457d30cbf729927396685b",
+      "size": 1268
+    },
+    "app/api/revalidate/route.ts": {
+      "sha256": "a1a29ae2625702ab7a3d6213ad19f0cd9da28eb3efc4590b797c79bb209352d8",
+      "size": 198
+    },
+    "app/error.tsx": {
+      "sha256": "4b654774e5a04d396a0166fcd0066793a2b9a289ceef67f03ae5e388e590b6ea",
+      "size": 705
+    },
+    "app/favicon.ico": {
+      "sha256": "348903e6767b45ac393336baadfa7dc8c77ecd7099d1df0b93cddb59f0797153",
+      "size": 15086
+    },
+    "app/globals.css": {
+      "sha256": "eb7ddefcdc07a581af97ffe31cb3a698f8f378fb2991452fe56eaeaafc7051ba",
+      "size": 711
+    },
+    "app/layout.tsx": {
+      "sha256": "1e2d9af19246148f3146c291a0e1120fc66e21d838c6d8aa2778c00de9259583",
+      "size": 1263
+    },
+    "app/opengraph-image.tsx": {
+      "sha256": "4436119da44dd76d16fbdc8ebba91dd4b3f7cc85b049826357668b947341ed43",
+      "size": 133
+    },
+    "app/page.tsx": {
+      "sha256": "f5f066a3e80c2555b46c48482d2e8182c74a1bb64f0fbb046714b452e7a0a6fd",
+      "size": 454
+    },
+    "app/product/[handle]/page.tsx": {
+      "sha256": "da24480e99ef304869977357a3bc2ffa89bf9ca347fd2dd00d3900b4c63960a0",
+      "size": 4664
+    },
+    "app/robots.ts": {
+      "sha256": "814aec2e96dcb9c9bf58ce8c259c91e4d848b044a0fa68856b60563048082c4c",
+      "size": 210
+    },
+    "app/search/[collection]/opengraph-image.tsx": {
+      "sha256": "6b0255fa1e6445abdbad890184f68e9f6d416c4c4f00deeafd830ce7df470c2d",
+      "size": 362
+    },
+    "app/search/[collection]/page.tsx": {
+      "sha256": "6e04a077012ffe76bdd7cb293af5b8df2c8ec508a585eebc3e18d11c1cc4501a",
+      "size": 1609
+    },
+    "app/search/children-wrapper.tsx": {
+      "sha256": "f532f534e228f8f57add3adafd3095e33115b7e59e53124681b6639517e1bc05",
+      "size": 373
+    },
+    "app/search/layout.tsx": {
+      "sha256": "b1ce3357712808e6c698bcc1eaeceb76a5a2478c628135f666a2112991e55097",
+      "size": 1035
+    },
+    "app/search/loading.tsx": {
+      "sha256": "8f26e6e18b9f752c0b7cd795b2cd6f40798e45bd7f27480766f5de0cda85ff17",
+      "size": 473
+    },
+    "app/search/page.tsx": {
+      "sha256": "0cb921097630effcd6197d84599b1a505485769451be8c2b8c42b7e43ebfe0c2",
+      "size": 1319
+    },
+    "app/sitemap.ts": {
+      "sha256": "748d73fdb220c0e9e3108362230bff0be828771fa02f9a5ab42561eb2d203118",
+      "size": 1352
+    },
+    "components/carousel.tsx": {
+      "sha256": "9197d9e1264bfd10122c42b33c8636680708b9ba2a2d284352dc4d58104a806f",
+      "size": 1576
+    },
+    "components/cart/actions.ts": {
+      "sha256": "3808dd1ce99b8e90c86f12559f3d9d259607405e8e699190e6d124f876a42e94",
+      "size": 2294
+    },
+    "components/cart/add-to-cart.tsx": {
+      "sha256": "af60a681c0dc50e9cfb3c95ee3445d59112c51c23cc680a3e26e80bdd8fbced4",
+      "size": 2579
+    },
+    "components/cart/cart-context.tsx": {
+      "sha256": "0b57fc3b1dae492f81ca0bc125081cab074a3ea2db6f764f769638709a11e275",
+      "size": 5690
+    },
+    "components/cart/delete-item-button.tsx": {
+      "sha256": "a0a29ba40d2c4983ccaa8ab55e591bfa1a4c776d34b54c3664f354e6d7d32c9b",
+      "size": 1040
+    },
+    "components/cart/edit-item-quantity-button.tsx": {
+      "sha256": "1e9cb538846922a5dc33b551c6b863346b7f74c9b36d907636fcab9461e00f9a",
+      "size": 1678
+    },
+    "components/cart/modal.tsx": {
+      "sha256": "0cd12428dd77fb7b4cfcf5115ab5d4e1ef0c69b80a6c65dbd04e9d7385c6381d",
+      "size": 11388
+    },
+    "components/cart/open-cart.tsx": {
+      "sha256": "c418e177a2426bf2a4f1727c5fc57b4a4ce49ebad38b56b28bcc198df42e5022",
+      "size": 762
+    },
+    "components/grid/index.tsx": {
+      "sha256": "2280cdaa07675e4a1c8517561d1f50ed681439a9123deeecb64b56443f421006",
+      "size": 486
+    },
+    "components/grid/three-items.tsx": {
+      "sha256": "16748f8a8923353535f39df873fccaefb6ada0f86f3b5784386d767f9418ed98",
+      "size": 1991
+    },
+    "components/grid/tile.tsx": {
+      "sha256": "17469351ead53c5fa56c46e00dc843573ed077b0e12057cb1f94dd317769c199",
+      "size": 1234
+    },
+    "components/icons/logo.tsx": {
+      "sha256": "17959ecc7ff1db15006c62f69cf475d390e4a96a25e4f5554c8a558f0b1a2e07",
+      "size": 492
+    },
+    "components/label.tsx": {
+      "sha256": "c90effb576897795ad0a3d54685a4171df76ccaea357b34d664c4d6c8d13e6cb",
+      "size": 1025
+    },
+    "components/layout/footer-menu.tsx": {
+      "sha256": "c659915112af27ba915eec4f048843c355ef8fd1ee30b354b4b1c6375c481ab9",
+      "size": 1100
+    },
+    "components/layout/footer.tsx": {
+      "sha256": "03973bbc802fdd191d74035c1755e9b36cbe4dd8fdc89732fc3f9b259b50e9f4",
+      "size": 3142
+    },
+    "components/layout/navbar/index.tsx": {
+      "sha256": "22c903903808218e1ebd3698f2541081aa5297784eaaf7225f0aeb6f50080b13",
+      "size": 2051
+    },
+    "components/layout/navbar/mobile-menu.tsx": {
+      "sha256": "a864ffe643701812e004b542c291db356881ee9c969a76ddc2de6ea49ae4bfa0",
+      "size": 3919
+    },
+    "components/layout/navbar/search.tsx": {
+      "sha256": "35296a6edc61002b65074cbd6d8906b4df0996777c305ae86906ac8c8bce7946",
+      "size": 1500
+    },
+    "components/layout/product-grid-items.tsx": {
+      "sha256": "dbe46e2bdecd31291e1b85eec8cb148b8a8d5e4fa0f5c0334900654b8a45d637",
+      "size": 1047
+    },
+    "components/layout/search/collections.tsx": {
+      "sha256": "268a7664eb95476be2ca61f6320d34019c510a251323bc523a81ddde974a2bc4",
+      "size": 1248
+    },
+    "components/layout/search/filter/dropdown.tsx": {
+      "sha256": "b6715632d4e3c8a0263c4a44e6e24e380e940aeecf8622208ef6bf8f9036fbb4",
+      "size": 1939
+    },
+    "components/layout/search/filter/index.tsx": {
+      "sha256": "ca7ab56e44334e789ab70e604f355b57d277006c9bb12ed82c6550659718f865",
+      "size": 1105
+    },
+    "components/layout/search/filter/item.tsx": {
+      "sha256": "2630dc7375aa6f4c387be1db2a1d3f3d22944dbfed62181431ca87057ae229a3",
+      "size": 2028
+    },
+    "components/loading-dots.tsx": {
+      "sha256": "83f8231b535a4d6daa2beaa1643a0c691a740ce2360a804cd4e4d81702236ea5",
+      "size": 476
+    },
+    "components/logo-square.tsx": {
+      "sha256": "1e0138265e5d370a72bada0e4c63b640a28b681a5211ecbdc45045a6096f0786",
+      "size": 616
+    },
+    "components/opengraph-image.tsx": {
+      "sha256": "03a6f3442758d7ccf4762620e7ef166ff92219e82fe8bf6309982a85b6c05cc3",
+      "size": 1095
+    },
+    "components/price.tsx": {
+      "sha256": "822992efd656cdcb2fa4741ce800c1fe13d65ec32ab8820dde18786599da71e2",
+      "size": 624
+    },
+    "components/product/gallery.tsx": {
+      "sha256": "c04d4b068596de8efabb5bcdbc75f7dd217d2a7e833d22530e39ceb3ae5fc1ad",
+      "size": 3351
+    },
+    "components/product/product-description.tsx": {
+      "sha256": "78bdda5b5498262b319405573aeb457b2436b850dc5dbb2894684a019b8fa9e2",
+      "size": 1082
+    },
+    "components/product/variant-selector.tsx": {
+      "sha256": "d8f062d81a0251c235eb19c2ee57f50c316999c13334af7717736b384ab3a065",
+      "size": 3956
+    },
+    "components/prose.tsx": {
+      "sha256": "c3071fb6b5138fc5c0670a2ce78fe5a7a9a446c3db6660d1d5b4508cf078f151",
+      "size": 828
+    },
+    "components/welcome-toast.tsx": {
+      "sha256": "4af9714fbc8531b46bc6cbd19390168bdcabf5ed94ec40db06f282c861209dc0",
+      "size": 968
+    },
+    "fonts/Inter-Bold.ttf": {
+      "sha256": "790c108befe859dac2ddbd20af3fbb6917c601b3d544c8a05761519f3b5508fe",
+      "size": 316100
+    },
+    "lib/constants.ts": {
+      "sha256": "1405a45a231902f99260d8d58f6b6ef1643917a2dba5065fea2cb49a2f9ef1e9",
+      "size": 1072
+    },
+    "lib/shopify/fragments/cart.ts": {
+      "sha256": "f84866450f1477b4ec14f37115de45c523f4089a64c3663cd4b9ca0a151e8ef7",
+      "size": 926
+    },
+    "lib/shopify/fragments/image.ts": {
+      "sha256": "93831b958ce115369fa73a92ea7a1718046c80a3bf207ba28e37e4476600ab88",
+      "size": 145
+    },
+    "lib/shopify/fragments/product.ts": {
+      "sha256": "321c7027c65dd5b66027bdbfa2ac52ca2c2f494c39134d61eed596a388461424",
+      "size": 990
+    },
+    "lib/shopify/fragments/seo.ts": {
+      "sha256": "2294d024bbaaf401421ed625edfb4614cff5c0dade0cb99e362be6f2b423f176",
+      "size": 122
+    },
+    "lib/shopify/index.ts": {
+      "sha256": "e339239e9f8280ac04b7755091230f6e1902455478ec6b5023761b436fc29ed5",
+      "size": 12925
+    },
+    "lib/shopify/mutations/cart.ts": {
+      "sha256": "354e802d2f5671276c4ccd19221f6fd7ee55ae70826132e9d0631d44bdf37e0b",
+      "size": 990
+    },
+    "lib/shopify/queries/cart.ts": {
+      "sha256": "770c86c8673c42f056b48761435f01fc49fdffe32d36bdc295fcd0845411c675",
+      "size": 192
+    },
+    "lib/shopify/queries/collection.ts": {
+      "sha256": "eaf140a10a4b1205b1665904885b4a4546ee887497501f6b12fc6fe93ed934bf",
+      "size": 1097
+    },
+    "lib/shopify/queries/menu.ts": {
+      "sha256": "6f51e60a90249d7b417a4e53b6c5893d9b28fa9a5e99491d19ecbb74febb385a",
+      "size": 169
+    },
+    "lib/shopify/queries/page.ts": {
+      "sha256": "92243860154fd18b908dbe8cad091cfa0e7d5471e076c0816e53afbbac177f89",
+      "size": 633
+    },
+    "lib/shopify/queries/product.ts": {
+      "sha256": "06ab56cd624ef9820fe70dcbfcb431fabc3afe55ca612786eb26466775cb438f",
+      "size": 769
+    },
+    "lib/shopify/types.ts": {
+      "sha256": "06aef3fcf7f982d8283e81238edb8b4742118598d9515681844468ee26d37203",
+      "size": 4451
+    },
+    "lib/type-guards.ts": {
+      "sha256": "4c21cf90c8243916b0b0e86dc81620722b2b520f361afef0ef7b8ecc2c680c4f",
+      "size": 741
+    },
+    "lib/utils.ts": {
+      "sha256": "064f7a556f5d535f55f627dcd726f5261f0400ac887eb1ce983024be48e12002",
+      "size": 1665
+    },
+    "license.md": {
+      "sha256": "ee765244e2d59f5234d474f62e0766fa0c8b99af967fdd4c0cb8dcb0c76ea224",
+      "size": 1079
+    },
+    "next-env.d.ts": {
+      "sha256": "6270cb0e77bf8b6add74edb5e90994381850fabaf82f3480e6dd0721eacbd40b",
+      "size": 249
+    },
+    "next.config.ts": {
+      "sha256": "8facc779b7fc549198773d6398d407541bff76c00f127bc80fb6af2c7f5e4c6b",
+      "size": 302
+    },
+    "package.json": {
+      "sha256": "34560d50cec2e0ad3776ab41084423f80a13ca1b0274c4a359f6f24383e344b0",
+      "size": 930
+    },
+    "postcss.config.mjs": {
+      "sha256": "891529e31892b09f3738cb4a88d39c1833e1718cddb1d93c2061a86b9847ee6e",
+      "size": 122
+    },
+    "tsconfig.json": {
+      "sha256": "00c395a2902fa768afc8c0b714841d6aafe5096bb5e8d7082c0e091e682053ee",
+      "size": 740
+    }
+  },
+  "framework": "nextjs",
+  "generated_at": "2026-05-04T21:46:48.157909+00:00",
+  "key": "next_commerce",
+  "match_patterns": [
+    "create-next-app@latest -e https://github.com/vercel/commerce"
+  ]
+}

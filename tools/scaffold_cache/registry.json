@@ -1,0 +1,123 @@
+{
+  "_comment": "Registry of scaffold commands referenced by task descriptions / variant prompts. {project} is replaced with a placeholder name when running. Cache is built by build_scaffold_cache.py and used by analyze_edits.py to classify Writes.",
+  "scaffolds": {
+    "next_app_default": {
+      "command": "npx -y create-next-app@latest {project} --ts --tailwind --eslint --app --no-src-dir --import-alias '@/*' --use-npm --skip-install --disable-git",
+      "framework": "nextjs",
+      "match_patterns": [
+        "create-next-app@latest --ts --tailwind --eslint --app",
+        "create-next-app@latest"
+      ],
+      "description": "Default Next.js App Router with TS + Tailwind (most common)"
+    },
+    "vite_react_ts": {
+      "command": "npx -y create-vite@latest {project} --template react-ts",
+      "framework": "vite",
+      "match_patterns": [
+        "create vite@latest",
+        "create-vite@latest",
+        "vite@latest"
+      ],
+      "description": "Vite + React + TypeScript"
+    },
+    "astro_blog": {
+      "command": "npx -y create-astro@latest {project} --template blog --typescript strict --no-install --no-git --yes --skip-houston",
+      "framework": "astro",
+      "match_patterns": [
+        "create astro@latest -- --template blog",
+        "create astro@latest --template blog",
+        "create-astro@latest -- --template blog"
+      ],
+      "description": "Astro blog template"
+    },
+    "astro_minimal": {
+      "command": "npx -y create-astro@latest {project} --template minimal --typescript strict --no-install --no-git --yes --skip-houston",
+      "framework": "astro",
+      "match_patterns": [
+        "create astro@latest -- --template minimal",
+        "create-astro@latest -- --template minimal",
+        "create astro@latest"
+      ],
+      "description": "Astro minimal template (also fallback for bare create astro)"
+    },
+    "svelte_default": {
+      "command": "npx -y sv create {project} --template minimal --types ts --no-add-ons --no-install",
+      "framework": "svelte",
+      "match_patterns": [
+        "create svelte@latest",
+        "sv create"
+      ],
+      "description": "SvelteKit minimal"
+    },
+    "remix_default": {
+      "command": "npx -y create-react-router@latest {project} --no-install",
+      "framework": "remix",
+      "match_patterns": [
+        "create-remix@latest",
+        "create-react-router@latest"
+      ],
+      "description": "Remix → React Router default template (Remix v2 was upstreamed into React Router; agents that try `create-remix@latest` are redirected to this scaffold)"
+    },
+    "nuxt_default": {
+      "command": "echo n | npx -y nuxi@latest init {project} --template minimal --packageManager npm --no-install --no-gitInit",
+      "framework": "nuxt",
+      "match_patterns": [
+        "nuxi@latest init",
+        "nuxi init"
+      ],
+      "description": "Nuxt 3 default (nuxi minimal template; 'echo n' answers the post-init modules prompt)"
+    },
+    "t3_default": {
+      "command": "npx -y create-t3-app@latest {project} --noInstall --noGit --default --CI",
+      "framework": "t3",
+      "match_patterns": [
+        "create-t3-app@latest",
+        "create t3-app@latest"
+      ],
+      "description": "T3 stack (Next + tRPC + Prisma + Tailwind + NextAuth)"
+    },
+    "eleventy_default": {
+      "command": "mkdir -p {project} && cd {project} && npm init -y && npm install --save-dev --package-lock-only --no-fund --no-audit @11ty/eleventy",
+      "framework": "eleventy",
+      "match_patterns": [
+        "@11ty/eleventy",
+        "@11ty/eleventy --serve"
+      ],
+      "description": "Eleventy bare init (npm init + 11ty dev dep). NOTE: 11ty doesn't have a real scaffold — agents build everything by hand. Cache is essentially just package.json."
+    },
+    "refine_default": {
+      "command": "npx -y create-refine-app@latest {project} -e finefoods-client",
+      "framework": "refine",
+      "match_patterns": [
+        "create refine-app@latest",
+        "create-refine-app@latest"
+      ],
+      "description": "Refine app (using finefoods-client example as a representative scaffold)"
+    },
+    "next_commerce": {
+      "command": "npx -y create-next-app@latest {project} -e https://github.com/vercel/commerce --skip-install --use-npm --disable-git",
+      "framework": "nextjs",
+      "match_patterns": [
+        "create-next-app@latest -e https://github.com/vercel/commerce"
+      ],
+      "description": "Next.js + Vercel Commerce starter (full e-commerce template)"
+    },
+    "django_default": {
+      "command": "python3 -m venv .preload_venv && .preload_venv/bin/pip install --quiet 'django>=5' && .preload_venv/bin/django-admin startproject myapp {project}; rm -rf .preload_venv",
+      "framework": "django",
+      "match_patterns": [
+        "django-admin startproject",
+        "pip install \"django"
+      ],
+      "description": "Django (creates a temp venv just to run django-admin startproject, then deletes the venv — only the Django project files remain)"
+    },
+    "shadcn_init": {
+      "command": "echo 'shadcn-init is run inside an existing project, not a primary scaffold; build script will skip.'",
+      "framework": "shadcn",
+      "match_patterns": [
+        "shadcn@latest init"
+      ],
+      "description": "shadcn/ui init (NOT a primary scaffold — runs inside an existing Next.js project to add components.json + utility files). Build script skips this entry; pattern is here only so detect_scaffold can flag overlapping files when used."
+    }
+  }
+}

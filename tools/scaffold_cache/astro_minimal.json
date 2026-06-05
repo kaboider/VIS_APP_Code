@@ -1,0 +1,56 @@
+{
+  "command": "npx -y create-astro@latest {project} --template minimal --typescript strict --no-install --no-git --yes --skip-houston",
+  "description": "Astro minimal template (also fallback for bare create astro)",
+  "elapsed_s": 4.0,
+  "file_count": 10,
+  "files": {
+    ".gitignore": {
+      "sha256": "12dc4676e70590a75488b85502453e80ceb15c200ea5eee70d69458719c7a44c",
+      "size": 264
+    },
+    ".vscode/extensions.json": {
+      "sha256": "cc8f4bcdc3c31be539aa67fbdacaaac4c9fcccb55b02048acf02f56e623ef682",
+      "size": 87
+    },
+    ".vscode/launch.json": {
+      "sha256": "461accad2f8d7604a8470fb4705b84768bcf24791b0974d49cba0d96c3fea857",
+      "size": 207
+    },
+    "README.md": {
+      "sha256": "9d5901b9a7c76174e6372535975a00056ecfb6a057c5101c64199e894e56aad3",
+      "size": 1604
+    },
+    "astro.config.mjs": {
+      "sha256": "30a47326419698ffe6e21bd253471e2306cc56129f90c5b6303c7f2122ad974e",
+      "size": 122
+    },
+    "package.json": {
+      "sha256": "8e4d37accb535e4d33393ab2289d7f5a8381e92ac30c41cb5e41421ba76342f6",
+      "size": 288
+    },
+    "public/favicon.ico": {
+      "sha256": "09d2ac08d8cca9b6e1f90221f345a8c4dd0371c64a0dc52b6f96fc589b1e3d67",
+      "size": 655
+    },
+    "public/favicon.svg": {
+      "sha256": "2d7a310283d6f9cc753210d83224cd6db6348cb82a5536348884e5831d46203f",
+      "size": 749
+    },
+    "src/pages/index.astro": {
+      "sha256": "669c338e83db1836cefb32382b8bd19c8ec7c13fb0005135911a497cb525a2f0",
+      "size": 351
+    },
+    "tsconfig.json": {
+      "sha256": "b5b0a5b04a14cddd7713c5e1c82e86c79c17c2f86b170e26e9b170b3d5e01cd9",
+      "size": 109
+    }
+  },
+  "framework": "astro",
+  "generated_at": "2026-05-04T22:34:14.521333+00:00",
+  "key": "astro_minimal",
+  "match_patterns": [
+    "create astro@latest -- --template minimal",
+    "create-astro@latest -- --template minimal",
+    "create astro@latest"
+  ]
+}

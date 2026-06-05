@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Anchor Marker</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; color: #222; }
+  body { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
+  header { padding: 8px 12px; background: #1f2937; color: #fff; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header button, header label { background: #374151; color: #fff; border: 1px solid #4b5563; padding: 6px 10px; cursor: pointer; border-radius: 4px; }
+  header button:hover, header label:hover { background: #4b5563; }
+  header .stat { padding: 4px 10px; background: #111827; border-radius: 4px; font-variant-numeric: tabular-nums; }
+  header .stat strong { color: #34d399; }
+  main { display: grid; grid-template-columns: 220px 1fr 360px; min-height: 0; overflow: hidden; }
+  aside.pages { background: #f3f4f6; border-right: 1px solid #d1d5db; overflow-y: auto; padding: 8px; }
+  aside.pages .page { padding: 8px 10px; cursor: pointer; border-radius: 4px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+  aside.pages .page:hover { background: #e5e7eb; }
+  aside.pages .page.active { background: #1f2937; color: #fff; }
+  aside.pages .page .count { font-size: 11px; opacity: 0.7; }
+  aside.pages .page .count.has { color: #10b981; opacity: 1; font-weight: 600; }
+  aside.pages .page.active .count.has { color: #34d399; }
+  section.canvas-wrap { overflow: auto; background: #e5e7eb; position: relative; }
+  section.canvas-wrap canvas { display: block; cursor: crosshair; background: #fff; }
+  aside.anns { background: #fafafa; border-left: 1px solid #d1d5db; overflow-y: auto; padding: 8px; font-size: 12px; }
+  aside.anns h3 { margin: 8px 0 4px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+  aside.anns .ann { padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 4px; margin-bottom: 4px; background: #fff; cursor: pointer; }
+  aside.anns .ann:hover { border-color: #9ca3af; }
+  aside.anns .ann.is-anchor { border-color: #10b981; background: #ecfdf5; }
+  aside.anns .ann .id { font-weight: 600; color: #6b7280; margin-right: 6px; }
+  aside.anns .ann .type { color: #6366f1; font-size: 11px; }
+  aside.anns .ann .reasoning { color: #4b5563; margin-top: 2px; font-size: 11px; }
+  aside.anns .ann .testid-row { margin-top: 6px; display: flex; gap: 4px; align-items: center; }
+  aside.anns .ann input.testid-input { flex: 1; font: inherit; padding: 3px 6px; border: 1px solid #d1d5db; border-radius: 3px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
+  aside.anns .ann button.tag-btn { padding: 3px 8px; font: inherit; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; }
+  aside.anns .ann button.tag-btn.add { background: #10b981; color: #fff; border-color: #059669; }
+  aside.anns .ann button.tag-btn.remove { background: #ef4444; color: #fff; border-color: #dc2626; }
+  aside.anns .ann.skip { opacity: 0.6; }
+  footer { padding: 8px 12px; background: #f3f4f6; border-top: 1px solid #d1d5db; display: flex; gap: 8px; align-items: center; }
+  footer button { padding: 6px 14px; font: inherit; border: 1px solid #4b5563; background: #1f2937; color: #fff; border-radius: 4px; cursor: pointer; }
+  footer button:hover { background: #374151; }
+  footer .hint { color: #6b7280; font-size: 12px; flex: 1; }
+  .help { padding: 12px; background: #fef3c7; border: 1px solid #fbbf24; border-radius: 4px; margin: 12px; font-size: 12px; line-height: 1.5; }
+  .help strong { color: #78350f; }
+</style>
+</head>
+<body>
+
+<header>
+  <label>📁 Load task folder
+    <input id="dirpicker" type="file" webkitdirectory directory multiple style="display:none">
+  </label>
+  <span class="stat">Task: <strong id="task-name">—</strong></span>
+  <span class="stat">Page: <strong id="page-name">—</strong></span>
+  <span class="stat">Anchors: <strong id="anchor-count">0</strong> total</span>
+  <button id="import-btn" title="Resume from a previously exported anchors.json">📥 Import</button>
+  <input id="import-file" type="file" accept=".json" style="display:none">
+  <button id="export-btn">💾 Export anchors.json</button>
+</header>
+
+<main>
+  <aside class="pages" id="pages-list">
+    <div class="help">
+      <strong>How to use:</strong><br>
+      1. Click <em>Load task folder</em> and pick a task dir like <code>8_ecommerce/</code>.<br>
+      2. For each page, click bboxes you want as anchors (or click items in the right pane).<br>
+      3. Type a kebab-case testid (e.g. <code>signin-submit</code>).<br>
+      4. Aim for <strong>4–6 spatially-spread anchors per page</strong> (header / mid / footer).<br>
+      5. Click <em>Export anchors.json</em> when done.
+    </div>
+  </aside>
+  <section class="canvas-wrap" id="canvas-wrap">
+    <canvas id="canvas" width="800" height="200"></canvas>
+  </section>
+  <aside class="anns" id="anns-list"></aside>
+</main>
+
+<footer>
+  <span class="hint" id="hint">Load a task folder to begin.</span>
+</footer>
+
+<script>
+'use strict';
+
+const CANVAS = document.getElementById('canvas');
+const CTX = CANVAS.getContext('2d');
+const DISPLAY_WIDTH = 1200;  // canvas display width
+
+const STATE = {
+  taskName: null,
+  pages: [],            // [{name, json, pngBlob}]
+  current: null,        // current page name
+  imageEl: null,        // current Image() loaded
+  scale: 1,             // displayed_px / png_px
+  anchors: {},          // {pageName: [{ann_id, testid, reasoning, bbox_png}]}
+};
+
+function $(sel, root=document) { return root.querySelector(sel); }
+function $$(sel, root=document) { return [...root.querySelectorAll(sel)]; }
+
+function suggestTestid(ann) {
+  // Pick distinctive nouns from reasoning
+  const txt = ((ann.reasoning || '') + ' ' + (ann.note || '')).toLowerCase();
+  const words = txt.match(/[a-z]{4,}/g) || [];
+  const stop = new Set(['page','frame','rectangle','element','button','clickable','unknown','navigation','link','group','item','input','field','triggers','opens','represents','from','this','into','onto','that','with','default','defaulting']);
+  const kept = words.filter(w => !stop.has(w));
+  let stem = (kept[0] || ann.subtype || ann.type || 'el').replace(/[^a-z0-9]/g, '');
+  // Add subtype hint as suffix
+  if (ann.subtype && ann.subtype.startsWith('click_')) {
+    const sub = ann.subtype.replace('click_', '').replace(/_/g, '-');
+    if (!stem.includes(sub.split('-')[0])) stem = `${stem}-${sub}`;
+  }
+  return stem.slice(0, 30);
+}
+
+function setHint(s) { $('#hint').textContent = s; }
+
+function refreshAnchorCount() {
+  const n = Object.values(STATE.anchors).reduce((s, arr) => s + arr.length, 0);
+  $('#anchor-count').textContent = n;
+}
+
+function refreshPagesList() {
+  const list = $('#pages-list');
+  list.innerHTML = '';
+  STATE.pages.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'page' + (STATE.current === p.name ? ' active' : '');
+    const total = p.json.annotations.filter(a => a.interactable && a.subtype !== 'click_dead').length;
+    const got = (STATE.anchors[p.name] || []).length;
+    const cls = got > 0 ? ' has' : '';
+    div.innerHTML = `<span>${p.name}</span><span class="count${cls}">${got}/${total}</span>`;
+    div.onclick = () => loadPage(p.name);
+    list.appendChild(div);
+  });
+}
+
+function refreshAnns() {
+  const list = $('#anns-list');
+  list.innerHTML = '';
+  if (!STATE.current) return;
+  const page = STATE.pages.find(p => p.name === STATE.current);
+  if (!page) return;
+
+  const anchorsByAnn = new Map();
+  for (const a of (STATE.anchors[STATE.current] || [])) {
+    anchorsByAnn.set(a.ann_id, a);
+  }
+
+  // Header row
+  const hdr = document.createElement('div');
+  hdr.style = 'margin-bottom:8px;color:#374151;font-weight:600;';
+  hdr.textContent = `${page.name}  —  ${page.json.annotations.length} annotations`;
+  list.appendChild(hdr);
+
+  page.json.annotations.forEach(ann => {
+    const wrapper = document.createElement('div');
+    const skip = ann.subtype === 'click_dead' || !ann.interactable;
+    const anc = anchorsByAnn.get(ann.id);
+    wrapper.className = 'ann' + (anc ? ' is-anchor' : '') + (skip ? ' skip' : '');
+
+    const top = document.createElement('div');
+    top.innerHTML = `<span class="id">#${ann.id}</span><span class="type">${ann.type}${ann.subtype ? '/' + ann.subtype : ''}</span>`;
+    wrapper.appendChild(top);
+
+    if (ann.reasoning || ann.note) {
+      const r = document.createElement('div');
+      r.className = 'reasoning';
+      r.textContent = (ann.reasoning || '') + (ann.note ? ' / ' + ann.note : '');
+      wrapper.appendChild(r);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'testid-row';
+    if (anc) {
+      const inp = document.createElement('input');
+      inp.className = 'testid-input';
+      inp.value = anc.testid;
+      inp.onchange = () => {
+        anc.testid = inp.value.trim();
+        refreshPagesList();
+      };
+      row.appendChild(inp);
+      const rm = document.createElement('button');
+      rm.className = 'tag-btn remove';
+      rm.textContent = 'Remove';
+      rm.onclick = () => {
+        STATE.anchors[STATE.current] = (STATE.anchors[STATE.current] || []).filter(a => a.ann_id !== ann.id);
+        refreshAnns();
+        drawAnnotations();
+        refreshPagesList();
+        refreshAnchorCount();
+        save();
+      };
+      row.appendChild(rm);
+    } else if (!skip) {
+      const inp = document.createElement('input');
+      inp.className = 'testid-input';
+      inp.placeholder = suggestTestid(ann);
+      const add = document.createElement('button');
+      add.className = 'tag-btn add';
+      add.textContent = '+ Anchor';
+      add.onclick = () => {
+        const testid = (inp.value.trim() || inp.placeholder).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        if (!testid) return alert('Enter a testid first');
+        STATE.anchors[STATE.current] = STATE.anchors[STATE.current] || [];
+        STATE.anchors[STATE.current].push({ ann_id: ann.id, testid, reasoning: ann.reasoning || '', bbox_png: ann.bbox_png });
+        refreshAnns();
+        drawAnnotations();
+        refreshPagesList();
+        refreshAnchorCount();
+        save();
+      };
+      row.appendChild(inp);
+      row.appendChild(add);
+    } else {
+      const lbl = document.createElement('span');
+      lbl.style = 'color:#9ca3af;font-size:11px;';
+      lbl.textContent = '(skip — click_dead / non-interactable)';
+      row.appendChild(lbl);
+    }
+    wrapper.appendChild(row);
+    list.appendChild(wrapper);
+  });
+}
+
+function drawAnnotations() {
+  if (!STATE.imageEl) return;
+  CTX.clearRect(0, 0, CANVAS.width, CANVAS.height);
+  CTX.drawImage(STATE.imageEl, 0, 0, CANVAS.width, CANVAS.height);
+
+  const page = STATE.pages.find(p => p.name === STATE.current);
+  if (!page) return;
+  const anchorsByAnn = new Map();
+  for (const a of (STATE.anchors[STATE.current] || [])) {
+    anchorsByAnn.set(a.ann_id, a);
+  }
+
+  page.json.annotations.forEach(ann => {
+    const bb = ann.bbox_png || {};
+    if (!bb.w || !bb.h) return;
+    const x = bb.x * STATE.scale;
+    const y = bb.y * STATE.scale;
+    const w = bb.w * STATE.scale;
+    const h = bb.h * STATE.scale;
+    const skip = ann.subtype === 'click_dead' || !ann.interactable;
+    const anc = anchorsByAnn.get(ann.id);
+    let strokeColor, fillColor;
+    if (anc) {
+      strokeColor = 'rgba(16,185,129,0.95)';
+      fillColor = 'rgba(16,185,129,0.18)';
+    } else if (skip) {
+      strokeColor = 'rgba(156,163,175,0.5)';
+      fillColor = 'rgba(0,0,0,0)';
+    } else {
+      strokeColor = 'rgba(99,102,241,0.7)';
+      fillColor = 'rgba(99,102,241,0.05)';
+    }
+    CTX.fillStyle = fillColor;
+    CTX.fillRect(x, y, w, h);
+    CTX.strokeStyle = strokeColor;
+    CTX.lineWidth = anc ? 3 : 1.5;
+    CTX.strokeRect(x, y, w, h);
+
+    // Label
+    const label = anc ? `${ann.id} ${anc.testid}` : `${ann.id}`;
+    CTX.font = '11px monospace';
+    const tw = CTX.measureText(label).width;
+    const labelY = Math.max(0, y - 14);
+    CTX.fillStyle = strokeColor;
+    CTX.fillRect(x, labelY, tw + 8, 14);
+    CTX.fillStyle = '#fff';
+    CTX.fillText(label, x + 4, labelY + 11);
+  });
+}
+
+CANVAS.addEventListener('click', e => {
+  if (!STATE.current) return;
+  const rect = CANVAS.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (CANVAS.width / rect.width);
+  const cy = (e.clientY - rect.top) * (CANVAS.height / rect.height);
+  const page = STATE.pages.find(p => p.name === STATE.current);
+  if (!page) return;
+  // Find topmost annotation containing the click
+  let hit = null;
+  for (const ann of page.json.annotations) {
+    const bb = ann.bbox_png || {};
+    if (!bb.w || !bb.h) continue;
+    const x = bb.x * STATE.scale;
+    const y = bb.y * STATE.scale;
+    const w = bb.w * STATE.scale;
+    const h = bb.h * STATE.scale;
+    if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) {
+      // Smaller bbox wins (likely the more specific element)
+      if (!hit || (bb.w * bb.h) < (hit.bbox_png.w * hit.bbox_png.h)) hit = ann;
+    }
+  }
+  if (!hit) return;
+  if (hit.subtype === 'click_dead' || !hit.interactable) {
+    setHint(`#${hit.id} is click_dead/non-interactable — cannot anchor.`);
+    return;
+  }
+  // Toggle: if already anchor, remove; else prompt for testid
+  const existing = (STATE.anchors[STATE.current] || []).find(a => a.ann_id === hit.id);
+  if (existing) {
+    if (confirm(`Remove anchor ${existing.testid} on #${hit.id}?`)) {
+      STATE.anchors[STATE.current] = STATE.anchors[STATE.current].filter(a => a.ann_id !== hit.id);
+      drawAnnotations(); refreshAnns(); refreshPagesList(); refreshAnchorCount(); save();
+    }
+    return;
+  }
+  const suggested = suggestTestid(hit);
+  const testid = prompt(
+    `Anchor #${hit.id} (${hit.type}/${hit.subtype || '-'})\n` +
+    `Reasoning: ${(hit.reasoning || hit.note || '(none)').slice(0, 200)}\n\nEnter testid:`,
+    suggested
+  );
+  if (!testid) return;
+  const clean = testid.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!clean) return;
+  STATE.anchors[STATE.current] = STATE.anchors[STATE.current] || [];
+  STATE.anchors[STATE.current].push({ ann_id: hit.id, testid: clean, reasoning: hit.reasoning || '', bbox_png: hit.bbox_png });
+  drawAnnotations(); refreshAnns(); refreshPagesList(); refreshAnchorCount(); save();
+});
+
+function loadPage(name) {
+  STATE.current = name;
+  $('#page-name').textContent = name;
+  const page = STATE.pages.find(p => p.name === name);
+  if (!page) return;
+  const url = URL.createObjectURL(page.pngBlob);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    STATE.imageEl = img;
+    STATE.scale = DISPLAY_WIDTH / img.width;
+    CANVAS.width = DISPLAY_WIDTH;
+    CANVAS.height = Math.round(img.height * STATE.scale);
+    drawAnnotations();
+    refreshAnns();
+    refreshPagesList();
+  };
+  img.src = url;
+}
+
+$('#dirpicker').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const taskName = files[0].webkitRelativePath.split('/')[0];
+  STATE.taskName = taskName;
+  $('#task-name').textContent = taskName;
+
+  // Find pairs of <prefix>_human_interaction_annotation.json + <prefix>.png
+  const annFiles = files.filter(f => f.name.endsWith('_human_interaction_annotation.json'));
+  const pngFiles = new Map(files.filter(f => f.name.endsWith('.png')).map(f => [f.name, f]));
+
+  STATE.pages = [];
+  for (const af of annFiles) {
+    const pageName = af.name.replace('_human_interaction_annotation.json', '');
+    const pngName = pageName + '.png';
+    const png = pngFiles.get(pngName);
+    if (!png) {
+      console.warn(`Missing PNG for ${pageName}`);
+      continue;
+    }
+    try {
+      const json = JSON.parse(await af.text());
+      STATE.pages.push({ name: pageName, json, pngBlob: png });
+    } catch (err) {
+      console.warn(`Skip ${af.name}: ${err}`);
+    }
+  }
+
+  STATE.pages.sort((a, b) => a.name.localeCompare(b.name));
+  if (!STATE.pages.length) { setHint('No interaction annotations found in this folder.'); return; }
+  setHint(`Loaded ${STATE.pages.length} pages from ${taskName}.`);
+
+  // Try to load saved anchors from localStorage
+  const saved = localStorage.getItem('anchors:' + taskName);
+  if (saved) {
+    try { STATE.anchors = JSON.parse(saved); } catch (_) {}
+  }
+  refreshAnchorCount();
+  loadPage(STATE.pages[0].name);
+});
+
+$('#import-btn').onclick = () => $('#import-file').click();
+$('#import-file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (data.task && data.anchors) {
+      STATE.anchors = data.anchors;
+      $('#task-name').textContent = data.task;
+    } else if (typeof data === 'object') {
+      STATE.anchors = data;
+    }
+    save();
+    refreshAnchorCount();
+    refreshPagesList();
+    refreshAnns();
+    drawAnnotations();
+    setHint('Imported anchors. Continue marking.');
+  } catch (err) {
+    alert('Invalid JSON: ' + err);
+  }
+});
+
+$('#export-btn').onclick = () => {
+  if (!STATE.taskName) return alert('Load a task folder first.');
+  const out = { task: STATE.taskName, anchors: STATE.anchors };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${STATE.taskName}_anchors.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+function save() {
+  if (STATE.taskName) {
+    localStorage.setItem('anchors:' + STATE.taskName, JSON.stringify(STATE.anchors));
+  }
+}
+
+window.addEventListener('beforeunload', save);
+</script>
+</body>
+</html>

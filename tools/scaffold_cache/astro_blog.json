@@ -1,0 +1,160 @@
+{
+  "command": "npx -y create-astro@latest {project} --template blog --typescript strict --no-install --no-git --yes --skip-houston",
+  "description": "Astro blog template",
+  "elapsed_s": 4.4,
+  "file_count": 36,
+  "files": {
+    ".gitignore": {
+      "sha256": "12dc4676e70590a75488b85502453e80ceb15c200ea5eee70d69458719c7a44c",
+      "size": 264
+    },
+    ".vscode/extensions.json": {
+      "sha256": "644546aa80ceeb45dc8b2f4c7840fd9522fb41d8592da9e11409dea2ecb06d11",
+      "size": 111
+    },
+    ".vscode/launch.json": {
+      "sha256": "461accad2f8d7604a8470fb4705b84768bcf24791b0974d49cba0d96c3fea857",
+      "size": 207
+    },
+    "README.md": {
+      "sha256": "09a4a828bd72c0716f6ab02d5bc3be1ff80b4af4c33364e85df6c3c6ce867b37",
+      "size": 2397
+    },
+    "astro.config.mjs": {
+      "sha256": "b70b6fe768af19c2abfc37a5d9c54cdd8a69d5eb69816ede74524905106da5f6",
+      "size": 735
+    },
+    "package.json": {
+      "sha256": "8b13d3b5d577d5f29c73e7a21d92679547d6566761274ecdd7a01a9f3f7742da",
+      "size": 407
+    },
+    "public/favicon.ico": {
+      "sha256": "09d2ac08d8cca9b6e1f90221f345a8c4dd0371c64a0dc52b6f96fc589b1e3d67",
+      "size": 655
+    },
+    "public/favicon.svg": {
+      "sha256": "2d7a310283d6f9cc753210d83224cd6db6348cb82a5536348884e5831d46203f",
+      "size": 749
+    },
+    "src/assets/blog-placeholder-1.jpg": {
+      "sha256": "06a35a9434dc3bb33e2b5b7d0ba08454fbd7724e6a4017c5e609b3fe749a943c",
+      "size": 32040
+    },
+    "src/assets/blog-placeholder-2.jpg": {
+      "sha256": "583b4e1d0faef6330cc1e9cb635bdd2233f8a771c756faa60c06c70f620d71c1",
+      "size": 33136
+    },
+    "src/assets/blog-placeholder-3.jpg": {
+      "sha256": "d5a59b41248c203b8128cffb672ffac3e4771ca29451d6f856b09d52a5248c5a",
+      "size": 28687
+    },
+    "src/assets/blog-placeholder-4.jpg": {
+      "sha256": "e0f9cc7783a492107b62fa155b504aee292001828ea86f2df59148cecd79f4b1",
+      "size": 38690
+    },
+    "src/assets/blog-placeholder-5.jpg": {
+      "sha256": "9e674b8cfe3e5e64b0c6c14bc46666f44755ee04888b7d6d3c31bcb54ba32d72",
+      "size": 34890
+    },
+    "src/assets/blog-placeholder-about.jpg": {
+      "sha256": "f05b2dbff18b181e3cdd494f1370b8e0c8e13a5c34400b0c5d181af7d45029f9",
+      "size": 21606
+    },
+    "src/assets/fonts/atkinson-bold.woff": {
+      "sha256": "f0de8ccb0af6e50fd1b51d50d5032c6824adc0f1b435345919fca1d9b72b3623",
+      "size": 23780
+    },
+    "src/assets/fonts/atkinson-regular.woff": {
+      "sha256": "b51d2e16226a56e304ab9ba67d22f504afc5bdceab1caefe386063a26ee4bc0b",
+      "size": 22792
+    },
+    "src/components/BaseHead.astro": {
+      "sha256": "51c76d2383d64a5a444c6bab340ad309f30f8e94f564680a256ac9500719e100",
+      "size": 1864
+    },
+    "src/components/Footer.astro": {
+      "sha256": "b3da2f8e5c5f52eb3a66924fa194af9be1f0f16f70fdc4809205ac3629ea9161",
+      "size": 3349
+    },
+    "src/components/FormattedDate.astro": {
+      "sha256": "3a7e8f80a5b38c918862754b2d1370c9baf70a9e2fab5ee6af58d8013ca20e0d",
+      "size": 224
+    },
+    "src/components/Header.astro": {
+      "sha256": "40898f34b72a98e65c7b52a3c994e9dedd9a7652fb4c4fc75feb76f0f796abee",
+      "size": 3734
+    },
+    "src/components/HeaderLink.astro": {
+      "sha256": "885f9b2a0fa4d0ea85696b94124a0141c0501edc798a0b6896058d211e1e1a1a",
+      "size": 579
+    },
+    "src/consts.ts": {
+      "sha256": "55ee7bf9dd7fa82f010b2f42e64b795c64953b1678a2ec43324f58549a712101",
+      "size": 224
+    },
+    "src/content.config.ts": {
+      "sha256": "923399314447e62a3250e753ade14620919ef0cb5c67da986b8ca9ab690b0aa9",
+      "size": 618
+    },
+    "src/content/blog/first-post.md": {
+      "sha256": "979f37df9c18cf711a6d28a08cff3456f30e3959d84b36b88a257e94f518f75a",
+      "size": 3455
+    },
+    "src/content/blog/markdown-style-guide.md": {
+      "sha256": "1376ae71bab721d74be3d1223985590a9dd053f94fa6eaec886d1dbe3b0cdd74",
+      "size": 4768
+    },
+    "src/content/blog/second-post.md": {
+      "sha256": "e023ea79fbfb91b8dc244e574ced2a799721076b1bef958a339147032aa6ce0b",
+      "size": 3456
+    },
+    "src/content/blog/third-post.md": {
+      "sha256": "adbacc139e351b3dd44684199700c919424caa58a88285e87158eec222ebcf44",
+      "size": 3455
+    },
+    "src/content/blog/using-mdx.mdx": {
+      "sha256": "e6c0145ac306d3a4809ede260c6a4727f66e4c63db4a8d5ec6bc7283e526941c",
+      "size": 1592
+    },
+    "src/layouts/BlogPost.astro": {
+      "sha256": "36fa9b49199789d7b06aa7b008fa9d2cad941520cc796bc71c1c39a763fc49b8",
+      "size": 1793
+    },
+    "src/pages/about.astro": {
+      "sha256": "fb5ca6717be0f5f77aa025e8fe7e93f03a1c6e04cedcdb82d19f531d7c22cfd7",
+      "size": 3711
+    },
+    "src/pages/blog/[...slug].astro": {
+      "sha256": "f16ad285a1c9542449f322eaa833d2b5f1d96ceb4e3ce18a73053435cb14e49d",
+      "size": 464
+    },
+    "src/pages/blog/index.astro": {
+      "sha256": "bfec5b69ad6faca22e062a4c565bc880d187bf6dc6d0ec607ea21ec9e1729d89",
+      "size": 2264
+    },
+    "src/pages/index.astro": {
+      "sha256": "e795a51b9fb3ad6ebeee267e20d03dc7059dd76bec50747fd626f84c80ae8fb7",
+      "size": 1937
+    },
+    "src/pages/rss.xml.js": {
+      "sha256": "e9e664174a1426248d232eac9f1685daeec526d2230bebfe119ec6f5778eb19f",
+      "size": 402
+    },
+    "src/styles/global.css": {
+      "sha256": "e19a8b50c54fe38bccafcc569c9c80b2d6aec85af066ef802cbfcb439d3a2fd5",
+      "size": 2590
+    },
+    "tsconfig.json": {
+      "sha256": "9563cef985ee6405d12c3e8e942c6f01fbebd8f94398169cccb563c6823eded4",
+      "size": 166
+    }
+  },
+  "framework": "astro",
+  "generated_at": "2026-05-04T22:34:10.479124+00:00",
+  "key": "astro_blog",
+  "match_patterns": [
+    "create astro@latest -- --template blog",
+    "create astro@latest --template blog",
+    "create-astro@latest -- --template blog"
+  ]
+}

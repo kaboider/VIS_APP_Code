@@ -1,0 +1,19 @@
+{
+  "command": "mkdir -p {project} && cd {project} && npm init -y && npm install --save-dev --package-lock-only --no-fund --no-audit @11ty/eleventy",
+  "description": "Eleventy bare init (npm init + 11ty dev dep). NOTE: 11ty doesn't have a real scaffold \u2014 agents build everything by hand. Cache is essentially just package.json.",
+  "elapsed_s": 4.9,
+  "file_count": 1,
+  "files": {
+    "package.json": {
+      "sha256": "99cc37abce4b63c4a0534db835d8d31ad6c4695166faa5a05049b2d8881144bb",
+      "size": 287
+    }
+  },
+  "framework": "eleventy",
+  "generated_at": "2026-05-04T21:44:22.261698+00:00",
+  "key": "eleventy_default",
+  "match_patterns": [
+    "@11ty/eleventy",
+    "@11ty/eleventy --serve"
+  ]
+}

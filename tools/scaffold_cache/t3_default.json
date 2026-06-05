@@ -1,0 +1,71 @@
+{
+  "command": "npx -y create-t3-app@latest {project} --noInstall --noGit --default --CI",
+  "description": "T3 stack (Next + tRPC + Prisma + Tailwind + NextAuth)",
+  "elapsed_s": 6.6,
+  "file_count": 14,
+  "files": {
+    ".env": {
+      "sha256": "38145d90216da03ac77a3e081356f08896a0e1359a81e4c18e8deb4097a8a353",
+      "size": 169
+    },
+    ".env.example": {
+      "sha256": "d929c3888557671b11dfa3aac08ee58b790a623d4a3a672a5df5926e84287195",
+      "size": 569
+    },
+    ".gitignore": {
+      "sha256": "f6327854af42f518ccb76641e43db184adcfbd1d52c12c08f0e1fa8754c7c649",
+      "size": 620
+    },
+    "README.md": {
+      "sha256": "e77939121a999686796e767a81462c429c7aa35a0ef202fcd297b0a009fe3ab8",
+      "size": 1438
+    },
+    "next-env.d.ts": {
+      "sha256": "9269d492817e359123ac64c8205e5d05dab63d71a3a7a229e68b5d9a0e8150bf",
+      "size": 201
+    },
+    "next.config.js": {
+      "sha256": "a0dc4e7351a60bfd6ab7728f9da49ff7daf57ae3582b347e3e48d737e55e3e0d",
+      "size": 483
+    },
+    "package.json": {
+      "sha256": "38c17f65606c8b81cc9e3481cac4dd2bb7a7ec905b23cfcf5c4a6e0283921478",
+      "size": 670
+    },
+    "public/favicon.ico": {
+      "sha256": "97f89bf12dcb67bca64029b0ca673f2fa269a7a8be64d71b23f5c9f55442db1f",
+      "size": 15406
+    },
+    "src/env.js": {
+      "sha256": "8e7c6fdc8ceaedf48855aab05bb5fcd7df18cf89f9e232bf0bed054bb8ee4592",
+      "size": 1272
+    },
+    "src/pages/_app.tsx": {
+      "sha256": "07e90ccc343787907e98765bfc3bf1855af17e7574f185ed42d5d2f60e68eb78",
+      "size": 364
+    },
+    "src/pages/index.module.css": {
+      "sha256": "aac329e950e117ced5cae9f53de170a86ca0b8aa103c6c567e50efdb96169199",
+      "size": 2812
+    },
+    "src/pages/index.tsx": {
+      "sha256": "365fa2f5749e945bc50b0395827e902faa7fa0a3e5be06f1de4981754e54fafc",
+      "size": 1514
+    },
+    "src/styles/globals.css": {
+      "sha256": "43ad456f3c8dc2d2dab0104f1faa7750da48f93451bbfe9b57d75c1ed5c4ce5c",
+      "size": 275
+    },
+    "tsconfig.json": {
+      "sha256": "a16b7d9967cd969cddaee9154b96d20dd591e28d0ea9d7f8f3a0eeea2b0d05d5",
+      "size": 883
+    }
+  },
+  "framework": "t3",
+  "generated_at": "2026-05-04T21:44:02.965402+00:00",
+  "key": "t3_default",
+  "match_patterns": [
+    "create-t3-app@latest",
+    "create t3-app@latest"
+  ]
+}

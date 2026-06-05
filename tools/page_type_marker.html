@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Page-type annotator</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #1a1d27; --panel-2: #232735; --line: #2e3344;
+    --ink: #e6e8ee; --mute: #8b91a3; --accent: #6aa6ff; --good: #5fd07a; --warn: #f0b75a;
+    --danger: #e36868;
+    --t-singleton: #6aa6ff; --t-detail: #5fd07a; --t-archive: #f0b75a;
+    --t-list: #b988e8; --t-form: #e36868; --t-modal: #8b91a3;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+  #app{display:grid;grid-template-columns:280px 1fr 380px;height:100vh}
+
+  /* sidebar (tasks + pages) */
+  aside.tasks{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto}
+  aside.tasks h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);
+                 margin:14px 14px 6px;font-weight:600}
+  details.task{margin:0 4px}
+  details.task>summary{cursor:pointer;padding:8px 12px;border-radius:6px;font-size:13px;
+                       display:flex;justify-content:space-between;align-items:center;list-style:none}
+  details.task>summary::-webkit-details-marker{display:none}
+  details.task>summary:hover{background:var(--panel-2)}
+  details.task .progress{font-size:11px;color:var(--mute)}
+  details.task .progress.done{color:var(--good)}
+  details.task ul{list-style:none;margin:2px 0 8px;padding:0}
+  details.task li{padding:5px 12px 5px 24px;font-size:12.5px;cursor:pointer;border-radius:4px;
+                  display:flex;justify-content:space-between;align-items:center;gap:6px}
+  details.task li:hover{background:var(--panel-2)}
+  details.task li.active{background:var(--accent);color:white}
+  details.task li .badge{font-size:10px;padding:1px 6px;border-radius:8px;color:white;flex-shrink:0}
+
+  /* viewer */
+  main.viewer{overflow:auto;padding:16px;background:#000}
+  main.viewer .empty{color:var(--mute);text-align:center;padding-top:40vh}
+  main.viewer img{max-width:100%;display:block;margin:0 auto;background:#fff}
+  main.viewer .meta{color:var(--mute);font-size:12px;text-align:center;margin-bottom:8px}
+
+  /* annotator panel */
+  section.panel{background:var(--panel);border-left:1px solid var(--line);padding:18px;overflow-y:auto}
+  section.panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);
+                   margin:0 0 6px;font-weight:600}
+  section.panel .page-name{font-size:15px;font-weight:600;margin:4px 0 16px}
+  section.panel label{display:block;font-size:11px;color:var(--mute);text-transform:uppercase;
+                      letter-spacing:.4px;margin:14px 0 6px;font-weight:600}
+  section.panel .types{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  section.panel .types button{padding:10px;border:1px solid var(--line);background:var(--panel-2);
+                              color:var(--ink);border-radius:6px;cursor:pointer;font-size:12px;
+                              font-weight:500;text-align:left;transition:all .1s}
+  section.panel .types button:hover{border-color:#fff3}
+  section.panel .types button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  section.panel .types button[data-type="singleton"].active{background:var(--t-singleton);border-color:var(--t-singleton)}
+  section.panel .types button[data-type="detail"].active   {background:var(--t-detail);border-color:var(--t-detail);color:#1a1d27}
+  section.panel .types button[data-type="archive"].active  {background:var(--t-archive);border-color:var(--t-archive);color:#1a1d27}
+  section.panel .types button[data-type="list"].active     {background:var(--t-list);border-color:var(--t-list)}
+  section.panel .types button[data-type="form"].active     {background:var(--t-form);border-color:var(--t-form)}
+  section.panel .types button[data-type="modal"].active    {background:var(--t-modal);border-color:var(--t-modal);color:#1a1d27}
+  section.panel input[type="text"]{width:100%;padding:8px 10px;background:var(--panel-2);
+                                   border:1px solid var(--line);color:var(--ink);border-radius:5px;
+                                   font-size:12.5px;font-family:ui-monospace,monospace}
+  section.panel input[type="text"]::placeholder{color:#4f5466}
+  section.panel input[type="text"]:focus{outline:none;border-color:var(--accent)}
+  section.panel .hint{font-size:11px;color:var(--mute);margin:6px 0 0}
+  section.panel nav.actions{display:flex;gap:8px;margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+  section.panel nav.actions button{flex:1;padding:8px;border:1px solid var(--line);background:var(--panel-2);
+                                   color:var(--ink);border-radius:5px;cursor:pointer;font-size:12px}
+  section.panel nav.actions button.primary{background:var(--accent);border-color:var(--accent)}
+  section.panel nav.actions button:hover{background:var(--panel-2);filter:brightness(1.2)}
+
+  /* keyboard hint */
+  .kbd{font-family:ui-monospace,monospace;font-size:10px;padding:1px 5px;border-radius:3px;
+       background:#3a3f50;color:#cfd3df;margin-left:6px}
+
+  /* toolbar */
+  header.bar{position:fixed;top:8px;right:400px;display:flex;gap:6px;background:var(--panel);
+             padding:6px 10px;border-radius:6px;border:1px solid var(--line);font-size:11.5px;color:var(--mute);
+             z-index:10;box-shadow:0 4px 12px #0008}
+  header.bar strong{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="bar">
+  Annotated <strong id="stat-done">0</strong> / <strong id="stat-total">0</strong>
+  &nbsp;·&nbsp; <span id="stat-pct">0%</span>
+</header>
+
+<div id="app">
+  <aside class="tasks">
+    <h2>Tasks</h2>
+    <div id="taskList"></div>
+  </aside>
+
+  <main class="viewer" id="viewer">
+    <div class="empty">Pick a page from the left.</div>
+  </main>
+
+  <section class="panel" id="panel">
+    <h2>Page type</h2>
+    <div class="page-name" id="curPage">—</div>
+
+    <label>Type <span class="kbd">1–6</span></label>
+    <div class="types" id="typeButtons">
+      <button data-type="singleton">singleton<br><small>fixed URL</small></button>
+      <button data-type="detail">detail<br><small>:id / :slug template</small></button>
+      <button data-type="archive">archive<br><small>filtered list (cat/tag/date)</small></button>
+      <button data-type="list">list<br><small>full index, no param</small></button>
+      <button data-type="form">form<br><small>compose / submit</small></button>
+      <button data-type="modal">modal<br><small>overlay, no URL</small></button>
+    </div>
+
+    <label>Route pattern</label>
+    <input type="text" id="routePattern" placeholder="/products/:id">
+    <p class="hint">Auto-suggested from page name + type. Edit if needed.</p>
+
+    <label>Sample URL</label>
+    <input type="text" id="sampleUrl" placeholder="/products/1">
+    <p class="hint">For singletons = route pattern. For detail/archive = a concrete seeded instance.</p>
+
+    <label>Notes (optional)</label>
+    <input type="text" id="notes" placeholder="">
+
+    <nav class="actions">
+      <button id="prev">← Prev <span class="kbd">k</span></button>
+      <button id="next" class="primary">Next → <span class="kbd">j</span></button>
+    </nav>
+    <nav class="actions">
+      <button id="exportBtn">Export JSON</button>
+      <button id="importBtn">Import JSON</button>
+      <button id="resetDefaultsBtn">Reset to pre-anno</button>
+      <button id="clearBtn">Clear all</button>
+    </nav>
+    <input type="file" id="importFile" accept=".json" hidden>
+  </section>
+</div>
+
+<script>
+// ===== embedded manifest (generated from tasks/<task>/pages/) =====
+const MANIFEST = [{"task": "1_newsletter", "pages": ["01_Home.png", "02_Single-post.png", "03_Author.png", "04_Category.png", "05_Tag.png", "06_Date.png", "07_Search.png", "08_About_me.png", "09_Contact_me.png"]}, {"task": "2_real-estate", "pages": ["01_sign_in.png", "02_sign_up.png", "03_Home_page.png", "04_Buy.png", "05_Buy.png", "06_Buy_Grid_With_Map.png", "07_Buy_Details_-_Request_Info.png", "08_Rent_Grid.png", "09_Rent_List.png", "10_Rent_Grid_with_Map.png", "11_Detail_Page_For_Rent.png", "12_Agent_Grid.png", "13_Agent_List.png", "14_Agent_Details.png"]}, {"task": "3_job-board", "pages": ["01_Landing_page.png", "02_Find_jobs.png", "03_Browse_Companies.png", "04_Search_Companies_Results.png", "05_Job_Descriptions.png", "06_Company_Profile.png", "07_Sign_Up.png", "08_Log_in.png", "09_Dashboard_Applicant.png", "10_Dashboard_-_Message.png", "11_Dashboard_-_Applications_History.png", "12_Dashboard_-_Find_Jobs.png", "13_Dashboard_-_Job_Descriptions.png", "14_Dashboard_-_Browse_Companies.png", "15_Dashboard_-_Profile.png", "16_Dashboard_-_Settings.png", "17_Dashboard_-_Settings.png", "18_Dashboard_-_Settings.png", "19_Dashboard_-_Help.png"]}, {"task": "4_forum", "pages": ["01_Register.png", "02_Login.png", "03_Main.png", "04_Post_View.png", "05_Post_Edit.png"]}, {"task": "5_travel-booking", "pages": ["01_Homepage.png", "02_build_your_own_package.png", "03_ABout_us.png", "04_Package_archive.png", "05_Package_Detail_Page.png", "06_Tour_Plan.png", "07_Location.png", "08_Tour_Gallery.png"]}, {"task": "6_chat", "pages": ["01_Sign_Up.png", "02_Sign_in.png", "03_Success.png", "04_Chat.png", "05_Contacts.png", "06_Group.png", "07_Status_User.png", "08_Calls.png", "09_video_Call.png", "10_Voice_call.png"]}, {"task": "7_cloud-storage", "pages": ["01_welcome.png", "02_Register.png", "03_Login.png", "04_Home.png", "05_Home.png", "06_Photos.png", "07_Folder_list.png", "08_Transfer.png", "09_Account_Profile.png", "10_Security.png", "11_Storage.png", "12_Billing.png", "13_Branding.png", "14_Notification.png", "15_Refer_a_friend.png", "16_Application.png", "17_Developer.png", "18_Privacy.png", "19_Dashboard.png", "20_Settings.png", "21_Appearance.png", "22_Landing_page.png", "23_Social_login.png", "24_Adsense.png", "25_Environment.png", "26_Pages.png", "27_Languages.png", "28_Tage.png", "29_Users.png", "30_Plans.png", "31_Transactions.png", "32_Payments.png", "33_Billing.png"]}, {"task": "8_ecommerce", "pages": ["01_Sign_in.png", "02_Sign_up.png", "03_Home_page.png", "04_Shop_page.png", "05_Product_Page.png", "06_Cart_Page.png", "07_Check_out.png"]}, {"task": "9_project-management", "pages": ["01_Login.png", "02_User_Dashboard.png", "03_User_Task.png", "04_User_Projects.png", "05_User_Project_Details.png", "06_User_Profile.png", "07_User_Task_Kanban_board.png", "08_User_WorkLog.png", "09_User_Performance_Report.png", "10_User_Task_PopUp.png"]}, {"task": "10_streaming_music-streaming", "pages": ["01_Onboarding.png", "02_Log_in_Page.png", "03_Sign_in_Page.png", "04_Login_successfully.png", "05_Home.png", "06_Playlist.png", "07_Browser.png", "08_Music_Player_Page.png", "09_Permium_Subscriptions.png", "10_Settings_-_Profile.png", "11_Settings_-_Detailes.png", "12_Settings_-_Contact_Us.png", "13_Settings_-_FAQ.png"]}];
+
+// ===== embedded pre-annotations (auto-loaded on first open) =====
+const DEFAULTS = {
+  "1_newsletter/01_Home.png": {
+    "type": "singleton",
+    "route": "/home",
+    "sample": "/home",
+    "notes": "auto: default | matched: Home"
+  },
+  "1_newsletter/02_Single-post.png": {
+    "type": "form",
+    "route": "/singles/new",
+    "sample": "/singles/new",
+    "notes": "auto: compose/edit/checkout signal | matched: Single-post (Post detail)"
+  },
+  "1_newsletter/03_Author.png": {
+    "type": "detail",
+    "route": "/authors/:id",
+    "sample": "/authors/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Author"
+  },
+  "1_newsletter/04_Category.png": {
+    "type": "archive",
+    "route": "/category/:slug",
+    "sample": "/category/sample",
+    "notes": "auto: category/tag/date axis | matched: Category"
+  },
+  "1_newsletter/05_Tag.png": {
+    "type": "archive",
+    "route": "/tag/:slug",
+    "sample": "/tag/sample",
+    "notes": "auto: category/tag/date axis | matched: Tag"
+  },
+  "1_newsletter/06_Date.png": {
+    "type": "archive",
+    "route": "/date/:slug",
+    "sample": "/date/sample",
+    "notes": "auto: category/tag/date axis | matched: Date"
+  },
+  "1_newsletter/07_Search.png": {
+    "type": "detail",
+    "route": "/searchs/:id",
+    "sample": "/searchs/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Search"
+  },
+  "1_newsletter/08_About_me.png": {
+    "type": "singleton",
+    "route": "/about-me",
+    "sample": "/about-me",
+    "notes": "auto: default | matched: About me"
+  },
+  "1_newsletter/09_Contact_me.png": {
+    "type": "form",
+    "route": "/contact-me",
+    "sample": "/contact-me",
+    "notes": "auto: compose/edit/checkout signal | matched: Contact me"
+  },
+  "2_real-estate/01_sign_in.png": {
+    "type": "singleton",
+    "route": "/sign-in",
+    "sample": "/sign-in",
+    "notes": "auto: auth page → singleton | matched: Sign in"
+  },
+  "2_real-estate/02_sign_up.png": {
+    "type": "singleton",
+    "route": "/sign-up",
+    "sample": "/sign-up",
+    "notes": "auto: auth page → singleton | matched: Sign up"
+  },
+  "2_real-estate/03_Home_page.png": {
+    "type": "detail",
+    "route": "/homes/:id",
+    "sample": "/homes/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Home page"
+  },
+  "2_real-estate/04_Buy.png": {
+    "type": "detail",
+    "route": "/buys/:id",
+    "sample": "/buys/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Buy (Grid)"
+  },
+  "2_real-estate/05_Buy.png": {
+    "type": "detail",
+    "route": "/buys/:id",
+    "sample": "/buys/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Buy (Grid)"
+  },
+  "2_real-estate/06_Buy_Grid_With_Map.png": {
+    "type": "detail",
+    "route": "/buy-grid-with-maps/:id",
+    "sample": "/buy-grid-with-maps/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Buy Grid With Map"
+  },
+  "2_real-estate/07_Buy_Details_-_Request_Info.png": {
+    "type": "detail",
+    "route": "/buy-details---request-infos/:id",
+    "sample": "/buy-details---request-infos/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Buy Details — Request Info"
+  },
+  "2_real-estate/08_Rent_Grid.png": {
+    "type": "detail",
+    "route": "/rent-grids/:id",
+    "sample": "/rent-grids/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Rent Grid"
+  },
+  "2_real-estate/09_Rent_List.png": {
+    "type": "detail",
+    "route": "/rent-lists/:id",
+    "sample": "/rent-lists/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Rent List"
+  },
+  "2_real-estate/10_Rent_Grid_with_Map.png": {
+    "type": "detail",
+    "route": "/rent-grid-with-maps/:id",
+    "sample": "/rent-grid-with-maps/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Rent Grid with Map"
+  },
+  "2_real-estate/11_Detail_Page_For_Rent.png": {
+    "type": "detail",
+    "route": "/detail-page-for-rents/:id",
+    "sample": "/detail-page-for-rents/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Detail Page For Rent"
+  },
+  "2_real-estate/12_Agent_Grid.png": {
+    "type": "detail",
+    "route": "/agent-grids/:id",
+    "sample": "/agent-grids/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Agent Grid"
+  },
+  "2_real-estate/13_Agent_List.png": {
+    "type": "list",
+    "route": "/agents",
+    "sample": "/agents",
+    "notes": "auto: grid/index of records | matched: Agent List"
+  },
+  "2_real-estate/14_Agent_Details.png": {
+    "type": "detail",
+    "route": "/agents/:id",
+    "sample": "/agents/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Agent Details"
+  },
+  "3_job-board/01_Landing_page.png": {
+    "type": "detail",
+    "route": "/landings/:id",
+    "sample": "/landings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Landing page"
+  },
+  "3_job-board/02_Find_jobs.png": {
+    "type": "list",
+    "route": "/find-jobs",
+    "sample": "/find-jobs",
+    "notes": "auto: grid/index of records | matched: Find jobs (Public search results)"
+  },
+  "3_job-board/03_Browse_Companies.png": {
+    "type": "archive",
+    "route": "/browse-companies/:slug",
+    "sample": "/browse-companies/sample",
+    "notes": "auto: category/tag/date axis | matched: Browse Companies (Public directory)"
+  },
+  "3_job-board/04_Search_Companies_Results.png": {
+    "type": "list",
+    "route": "/search-companies-results",
+    "sample": "/search-companies-results",
+    "notes": "auto: grid/index of records | matched: Search Companies Results"
+  },
+  "3_job-board/05_Job_Descriptions.png": {
+    "type": "detail",
+    "route": "/job-descriptions/:id",
+    "sample": "/job-descriptions/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Job Descriptions (Public job detail)"
+  },
+  "3_job-board/06_Company_Profile.png": {
+    "type": "detail",
+    "route": "/company-profiles/:id",
+    "sample": "/company-profiles/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Company Profile (Public)"
+  },
+  "3_job-board/07_Sign_Up.png": {
+    "type": "singleton",
+    "route": "/sign-up",
+    "sample": "/sign-up",
+    "notes": "auto: auth page → singleton | matched: Sign Up"
+  },
+  "3_job-board/08_Log_in.png": {
+    "type": "singleton",
+    "route": "/log-in",
+    "sample": "/log-in",
+    "notes": "auto: auth page → singleton | matched: Log in"
+  },
+  "3_job-board/09_Dashboard_Applicant.png": {
+    "type": "list",
+    "route": "/dashboard-applicants",
+    "sample": "/dashboard-applicants",
+    "notes": "auto: grid/index of records | matched: Dashboard Applicant (Home)"
+  },
+  "3_job-board/10_Dashboard_-_Message.png": {
+    "type": "singleton",
+    "route": "/dashboard---message",
+    "sample": "/dashboard---message",
+    "notes": "auto: default | matched: Dashboard — Message"
+  },
+  "3_job-board/11_Dashboard_-_Applications_History.png": {
+    "type": "list",
+    "route": "/dashboard---applications-historys",
+    "sample": "/dashboard---applications-historys",
+    "notes": "auto: grid/index of records | matched: Dashboard — Applications History"
+  },
+  "3_job-board/12_Dashboard_-_Find_Jobs.png": {
+    "type": "list",
+    "route": "/dashboard---find-jobs",
+    "sample": "/dashboard---find-jobs",
+    "notes": "auto: grid/index of records | matched: Dashboard — Find Jobs (canvas overview)"
+  },
+  "3_job-board/13_Dashboard_-_Job_Descriptions.png": {
+    "type": "detail",
+    "route": "/dashboard---job-descriptions/:id",
+    "sample": "/dashboard---job-descriptions/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Dashboard — Job Descriptions (in-app)"
+  },
+  "3_job-board/14_Dashboard_-_Browse_Companies.png": {
+    "type": "archive",
+    "route": "/dashboard---browse-companies/:slug",
+    "sample": "/dashboard---browse-companies/sample",
+    "notes": "auto: category/tag/date axis | matched: Dashboard — Browse Companies (in-app)"
+  },
+  "3_job-board/15_Dashboard_-_Profile.png": {
+    "type": "detail",
+    "route": "/dashboard---profiles/:id",
+    "sample": "/dashboard---profiles/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Dashboard — Profile (My Public Profile)"
+  },
+  "3_job-board/16_Dashboard_-_Settings.png": {
+    "type": "detail",
+    "route": "/dashboard---settings/:id",
+    "sample": "/dashboard---settings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Dashboard — Settings (My Profile / Account Settings)"
+  },
+  "3_job-board/17_Dashboard_-_Settings.png": {
+    "type": "detail",
+    "route": "/dashboard---settings/:id",
+    "sample": "/dashboard---settings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Dashboard — Settings (My Profile / Account Settings)"
+  },
+  "3_job-board/18_Dashboard_-_Settings.png": {
+    "type": "detail",
+    "route": "/dashboard---settings/:id",
+    "sample": "/dashboard---settings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Dashboard — Settings (My Profile / Account Settings)"
+  },
+  "3_job-board/19_Dashboard_-_Help.png": {
+    "type": "singleton",
+    "route": "/dashboard---help",
+    "sample": "/dashboard---help",
+    "notes": "auto: default | matched: Dashboard — Help (Help Center)"
+  },
+  "4_forum/01_Register.png": {
+    "type": "singleton",
+    "route": "/register",
+    "sample": "/register",
+    "notes": "auto: auth page → singleton | matched: Register"
+  },
+  "4_forum/02_Login.png": {
+    "type": "singleton",
+    "route": "/login",
+    "sample": "/login",
+    "notes": "auto: auth page → singleton | matched: Login"
+  },
+  "4_forum/03_Main.png": {
+    "type": "singleton",
+    "route": "/main",
+    "sample": "/main",
+    "notes": "auto: default | matched: Main (Questions feed)"
+  },
+  "4_forum/04_Post_View.png": {
+    "type": "form",
+    "route": "/post-view",
+    "sample": "/post-view",
+    "notes": "auto: compose/edit/checkout signal | matched: Post View (Open Question)"
+  },
+  "4_forum/05_Post_Edit.png": {
+    "type": "form",
+    "route": "/posts/:id/edit",
+    "sample": "/posts/1/edit",
+    "notes": "auto: compose/edit/checkout signal | matched: Post Edit (New Question)"
+  },
+  "5_travel-booking/01_Homepage.png": {
+    "type": "singleton",
+    "route": "/homepage",
+    "sample": "/homepage",
+    "notes": "auto: default | matched: Homepage"
+  },
+  "5_travel-booking/02_build_your_own_package.png": {
+    "type": "form",
+    "route": "/build-your-own-package",
+    "sample": "/build-your-own-package",
+    "notes": "auto: compose/edit/checkout signal | matched: Build your own package"
+  },
+  "5_travel-booking/03_ABout_us.png": {
+    "type": "singleton",
+    "route": "/about-us",
+    "sample": "/about-us",
+    "notes": "auto: default | matched: About us"
+  },
+  "5_travel-booking/04_Package_archive.png": {
+    "type": "archive",
+    "route": "/package/:slug",
+    "sample": "/package/sample",
+    "notes": "auto: category/tag/date axis | matched: Package archive"
+  },
+  "5_travel-booking/05_Package_Detail_Page.png": {
+    "type": "detail",
+    "route": "/package-details/:id",
+    "sample": "/package-details/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Package Detail Page (Information tab)"
+  },
+  "5_travel-booking/06_Tour_Plan.png": {
+    "type": "form",
+    "route": "/tour-plan",
+    "sample": "/tour-plan",
+    "notes": "auto: compose/edit/checkout signal | matched: Tour Plan (tab)"
+  },
+  "5_travel-booking/07_Location.png": {
+    "type": "singleton",
+    "route": "/location",
+    "sample": "/location",
+    "notes": "auto: default | matched: Location (tab)"
+  },
+  "5_travel-booking/08_Tour_Gallery.png": {
+    "type": "singleton",
+    "route": "/tour-gallery",
+    "sample": "/tour-gallery",
+    "notes": "auto: default | matched: Tour Gallery (tab)"
+  },
+  "6_chat/01_Sign_Up.png": {
+    "type": "singleton",
+    "route": "/sign-up",
+    "sample": "/sign-up",
+    "notes": "auto: auth page → singleton | matched: Sign Up"
+  },
+  "6_chat/02_Sign_in.png": {
+    "type": "singleton",
+    "route": "/sign-in",
+    "sample": "/sign-in",
+    "notes": "auto: auth page → singleton | matched: Sign in"
+  },
+  "6_chat/03_Success.png": {
+    "type": "modal",
+    "route": "(no URL)",
+    "sample": "(no URL)",
+    "notes": "auto: popup / overlay signal | matched: Success"
+  },
+  "6_chat/04_Chat.png": {
+    "type": "singleton",
+    "route": "/chat",
+    "sample": "/chat",
+    "notes": "auto: default | matched: Chat (1:1 conversation)"
+  },
+  "6_chat/05_Contacts.png": {
+    "type": "detail",
+    "route": "/contacts/:id",
+    "sample": "/contacts/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Contacts"
+  },
+  "6_chat/06_Group.png": {
+    "type": "singleton",
+    "route": "/group",
+    "sample": "/group",
+    "notes": "auto: default | matched: Group (group chat)"
+  },
+  "6_chat/07_Status_User.png": {
+    "type": "detail",
+    "route": "/status-users/:id",
+    "sample": "/status-users/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Status / User (Status story viewer)"
+  },
+  "6_chat/08_Calls.png": {
+    "type": "list",
+    "route": "/calls",
+    "sample": "/calls",
+    "notes": "auto: grid/index of records | matched: Calls (call history list)"
+  },
+  "6_chat/09_video_Call.png": {
+    "type": "singleton",
+    "route": "/video-call",
+    "sample": "/video-call",
+    "notes": "auto: default | matched: Video Call"
+  },
+  "6_chat/10_Voice_call.png": {
+    "type": "singleton",
+    "route": "/voice-call",
+    "sample": "/voice-call",
+    "notes": "auto: default | matched: Voice call"
+  },
+  "7_cloud-storage/01_welcome.png": {
+    "type": "singleton",
+    "route": "/welcome",
+    "sample": "/welcome",
+    "notes": "auto: auth page → singleton | matched: Welcome (Email check)"
+  },
+  "7_cloud-storage/02_Register.png": {
+    "type": "singleton",
+    "route": "/register",
+    "sample": "/register",
+    "notes": "auto: auth page → singleton | matched: Register"
+  },
+  "7_cloud-storage/03_Login.png": {
+    "type": "singleton",
+    "route": "/login",
+    "sample": "/login",
+    "notes": "auto: auth page → singleton | matched: Login (password challenge)"
+  },
+  "7_cloud-storage/04_Home.png": {
+    "type": "detail",
+    "route": "/homes/:id",
+    "sample": "/homes/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Home (All Files — list view)"
+  },
+  "7_cloud-storage/05_Home.png": {
+    "type": "detail",
+    "route": "/homes/:id",
+    "sample": "/homes/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Home (All Files — list view)"
+  },
+  "7_cloud-storage/06_Photos.png": {
+    "type": "list",
+    "route": "/photos",
+    "sample": "/photos",
+    "notes": "auto: grid/index of records | matched: Photos"
+  },
+  "7_cloud-storage/07_Folder_list.png": {
+    "type": "detail",
+    "route": "/folder-lists/:id",
+    "sample": "/folder-lists/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Folder list"
+  },
+  "7_cloud-storage/08_Transfer.png": {
+    "type": "detail",
+    "route": "/transfers/:id",
+    "sample": "/transfers/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Transfer"
+  },
+  "7_cloud-storage/09_Account_Profile.png": {
+    "type": "detail",
+    "route": "/account-profiles/:id",
+    "sample": "/account-profiles/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Account / Profile (Settings tab)"
+  },
+  "7_cloud-storage/10_Security.png": {
+    "type": "detail",
+    "route": "/securitys/:id",
+    "sample": "/securitys/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Security (Profile sub-tab)"
+  },
+  "7_cloud-storage/11_Storage.png": {
+    "type": "detail",
+    "route": "/storages/:id",
+    "sample": "/storages/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Storage (Profile sub-tab)"
+  },
+  "7_cloud-storage/12_Billing.png": {
+    "type": "detail",
+    "route": "/billings/:id",
+    "sample": "/billings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Billing (Profile sub-tab)"
+  },
+  "7_cloud-storage/13_Branding.png": {
+    "type": "detail",
+    "route": "/brandings/:id",
+    "sample": "/brandings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Branding (Profile sub-tab)"
+  },
+  "7_cloud-storage/14_Notification.png": {
+    "type": "detail",
+    "route": "/notifications/:id",
+    "sample": "/notifications/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Notification (Profile sub-tab)"
+  },
+  "7_cloud-storage/15_Refer_a_friend.png": {
+    "type": "detail",
+    "route": "/refer-a-friends/:id",
+    "sample": "/refer-a-friends/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Refer a friend (Profile sub-tab)"
+  },
+  "7_cloud-storage/16_Application.png": {
+    "type": "singleton",
+    "route": "/application",
+    "sample": "/application",
+    "notes": "auto: default | no heading match"
+  },
+  "7_cloud-storage/17_Developer.png": {
+    "type": "detail",
+    "route": "/developers/:id",
+    "sample": "/developers/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Developer (Profile sub-tab)"
+  },
+  "7_cloud-storage/18_Privacy.png": {
+    "type": "detail",
+    "route": "/privacys/:id",
+    "sample": "/privacys/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Privacy (Profile sub-tab)"
+  },
+  "7_cloud-storage/19_Dashboard.png": {
+    "type": "singleton",
+    "route": "/dashboard",
+    "sample": "/dashboard",
+    "notes": "auto: default | matched: Dashboard (Admin — Analytics)"
+  },
+  "7_cloud-storage/20_Settings.png": {
+    "type": "singleton",
+    "route": "/settings",
+    "sample": "/settings",
+    "notes": "auto: default | matched: Settings (Admin — system)"
+  },
+  "7_cloud-storage/21_Appearance.png": {
+    "type": "singleton",
+    "route": "/appearance",
+    "sample": "/appearance",
+    "notes": "auto: default | matched: Appearance (Admin)"
+  },
+  "7_cloud-storage/22_Landing_page.png": {
+    "type": "detail",
+    "route": "/landings/:id",
+    "sample": "/landings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Landing page (Admin)"
+  },
+  "7_cloud-storage/23_Social_login.png": {
+    "type": "singleton",
+    "route": "/social-login",
+    "sample": "/social-login",
+    "notes": "auto: auth page → singleton | matched: Social login (Admin)"
+  },
+  "7_cloud-storage/24_Adsense.png": {
+    "type": "singleton",
+    "route": "/adsense",
+    "sample": "/adsense",
+    "notes": "auto: default | matched: Adsense (Admin)"
+  },
+  "7_cloud-storage/25_Environment.png": {
+    "type": "singleton",
+    "route": "/environment",
+    "sample": "/environment",
+    "notes": "auto: default | matched: Environment (Admin)"
+  },
+  "7_cloud-storage/26_Pages.png": {
+    "type": "detail",
+    "route": "/pages/:id",
+    "sample": "/pages/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Pages (Admin — CMS)"
+  },
+  "7_cloud-storage/27_Languages.png": {
+    "type": "list",
+    "route": "/languages",
+    "sample": "/languages",
+    "notes": "auto: grid/index of records | matched: Languages (Admin — i18n)"
+  },
+  "7_cloud-storage/28_Tage.png": {
+    "type": "singleton",
+    "route": "/tage",
+    "sample": "/tage",
+    "notes": "auto: default | no heading match"
+  },
+  "7_cloud-storage/29_Users.png": {
+    "type": "list",
+    "route": "/users",
+    "sample": "/users",
+    "notes": "auto: grid/index of records | matched: Users (Admin — user management)"
+  },
+  "7_cloud-storage/30_Plans.png": {
+    "type": "list",
+    "route": "/plans",
+    "sample": "/plans",
+    "notes": "auto: grid/index of records | matched: Plans (Admin — subscriptions)"
+  },
+  "7_cloud-storage/31_Transactions.png": {
+    "type": "list",
+    "route": "/transactions",
+    "sample": "/transactions",
+    "notes": "auto: grid/index of records | matched: Transactions (Admin)"
+  },
+  "7_cloud-storage/32_Payments.png": {
+    "type": "list",
+    "route": "/payments",
+    "sample": "/payments",
+    "notes": "auto: grid/index of records | matched: Payments (Admin — gateways)"
+  },
+  "7_cloud-storage/33_Billing.png": {
+    "type": "detail",
+    "route": "/billings/:id",
+    "sample": "/billings/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Billing (Profile sub-tab)"
+  },
+  "8_ecommerce/01_Sign_in.png": {
+    "type": "singleton",
+    "route": "/sign-in",
+    "sample": "/sign-in",
+    "notes": "auto: auth page → singleton | matched: Sign in"
+  },
+  "8_ecommerce/02_Sign_up.png": {
+    "type": "singleton",
+    "route": "/sign-up",
+    "sample": "/sign-up",
+    "notes": "auto: auth page → singleton | matched: Sign up"
+  },
+  "8_ecommerce/03_Home_page.png": {
+    "type": "detail",
+    "route": "/homes/:id",
+    "sample": "/homes/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Home page"
+  },
+  "8_ecommerce/04_Shop_page.png": {
+    "type": "detail",
+    "route": "/shops/:id",
+    "sample": "/shops/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Shop page"
+  },
+  "8_ecommerce/05_Product_Page.png": {
+    "type": "detail",
+    "route": "/products/:id",
+    "sample": "/products/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Product Page"
+  },
+  "8_ecommerce/06_Cart_Page.png": {
+    "type": "form",
+    "route": "/cart-page",
+    "sample": "/cart-page",
+    "notes": "auto: compose/edit/checkout signal | matched: Cart Page"
+  },
+  "8_ecommerce/07_Check_out.png": {
+    "type": "form",
+    "route": "/check-out",
+    "sample": "/check-out",
+    "notes": "auto: compose/edit/checkout signal | matched: Check out"
+  },
+  "9_project-management/01_Login.png": {
+    "type": "singleton",
+    "route": "/login",
+    "sample": "/login",
+    "notes": "auto: auth page → singleton | matched: Login"
+  },
+  "9_project-management/02_User_Dashboard.png": {
+    "type": "singleton",
+    "route": "/user-dashboard",
+    "sample": "/user-dashboard",
+    "notes": "auto: default | matched: User Dashboard (Home)"
+  },
+  "9_project-management/03_User_Task.png": {
+    "type": "detail",
+    "route": "/user-tasks/:id",
+    "sample": "/user-tasks/1",
+    "notes": "auto: name suggests detail/single-instance | matched: User Task (List view)"
+  },
+  "9_project-management/04_User_Projects.png": {
+    "type": "detail",
+    "route": "/user-projects/:id",
+    "sample": "/user-projects/1",
+    "notes": "auto: name suggests detail/single-instance | matched: User Projects (Card grid)"
+  },
+  "9_project-management/05_User_Project_Details.png": {
+    "type": "detail",
+    "route": "/user-projects/:id",
+    "sample": "/user-projects/1",
+    "notes": "auto: detail-template + drill-in signal | matched: User Project Details (Tasks within a project)"
+  },
+  "9_project-management/06_User_Profile.png": {
+    "type": "detail",
+    "route": "/user-profiles/:id",
+    "sample": "/user-profiles/1",
+    "notes": "auto: name suggests detail/single-instance | matched: User Profile"
+  },
+  "9_project-management/07_User_Task_Kanban_board.png": {
+    "type": "form",
+    "route": "/user-task-kanban-board",
+    "sample": "/user-task-kanban-board",
+    "notes": "auto: compose/edit/checkout signal | matched: User Task Kanban Board"
+  },
+  "9_project-management/08_User_WorkLog.png": {
+    "type": "singleton",
+    "route": "/user-worklog",
+    "sample": "/user-worklog",
+    "notes": "auto: default | matched: User WorkLog"
+  },
+  "9_project-management/09_User_Performance_Report.png": {
+    "type": "singleton",
+    "route": "/user-performance-report",
+    "sample": "/user-performance-report",
+    "notes": "auto: default | matched: User Performance / Report"
+  },
+  "9_project-management/10_User_Task_PopUp.png": {
+    "type": "form",
+    "route": "/user-task-popup",
+    "sample": "/user-task-popup",
+    "notes": "auto: compose/edit/checkout signal | matched: User Task PopUp (Task detail modal)"
+  },
+  "10_streaming_music-streaming/01_Onboarding.png": {
+    "type": "singleton",
+    "route": "/onboarding",
+    "sample": "/onboarding",
+    "notes": "auto: auth page → singleton | matched: Onboarding (Splash)"
+  },
+  "10_streaming_music-streaming/02_Log_in_Page.png": {
+    "type": "singleton",
+    "route": "/log-in-page",
+    "sample": "/log-in-page",
+    "notes": "auto: auth page → singleton | matched: Log In Page"
+  },
+  "10_streaming_music-streaming/03_Sign_in_Page.png": {
+    "type": "singleton",
+    "route": "/sign-in-page",
+    "sample": "/sign-in-page",
+    "notes": "auto: auth page → singleton | matched: Sign In Page"
+  },
+  "10_streaming_music-streaming/04_Login_successfully.png": {
+    "type": "singleton",
+    "route": "/login-successfully",
+    "sample": "/login-successfully",
+    "notes": "auto: auth page → singleton | matched: Login successfully"
+  },
+  "10_streaming_music-streaming/05_Home.png": {
+    "type": "singleton",
+    "route": "/home",
+    "sample": "/home",
+    "notes": "auto: default | matched: Home (Dashboard)"
+  },
+  "10_streaming_music-streaming/06_Playlist.png": {
+    "type": "archive",
+    "route": "/playlist/:slug",
+    "sample": "/playlist/sample",
+    "notes": "auto: category/tag/date axis | matched: Playlist"
+  },
+  "10_streaming_music-streaming/07_Browser.png": {
+    "type": "list",
+    "route": "/browsers",
+    "sample": "/browsers",
+    "notes": "auto: grid/index of records | matched: Browser"
+  },
+  "10_streaming_music-streaming/08_Music_Player_Page.png": {
+    "type": "detail",
+    "route": "/music-players/:id",
+    "sample": "/music-players/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Music Player Page"
+  },
+  "10_streaming_music-streaming/09_Permium_Subscriptions.png": {
+    "type": "singleton",
+    "route": "/permium-subscriptions",
+    "sample": "/permium-subscriptions",
+    "notes": "auto: default | matched: Premium Subscriptions"
+  },
+  "10_streaming_music-streaming/10_Settings_-_Profile.png": {
+    "type": "detail",
+    "route": "/settings---profiles/:id",
+    "sample": "/settings---profiles/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Settings — Profile"
+  },
+  "10_streaming_music-streaming/11_Settings_-_Detailes.png": {
+    "type": "detail",
+    "route": "/settings---detailes/:id",
+    "sample": "/settings---detailes/1",
+    "notes": "auto: name suggests detail/single-instance | matched: Settings — Profile"
+  },
+  "10_streaming_music-streaming/12_Settings_-_Contact_Us.png": {
+    "type": "singleton",
+    "route": "/settings---contact-us",
+    "sample": "/settings---contact-us",
+    "notes": "auto: default | matched: Settings — Contact Us"
+  },
+  "10_streaming_music-streaming/13_Settings_-_FAQ.png": {
+    "type": "list",
+    "route": "/settings---faqs",
+    "sample": "/settings---faqs",
+    "notes": "auto: grid/index of records | matched: Settings — FAQ"
+  }
+};
+
+// ===== state =====
+const STORAGE_KEY = "page_type_annotations_v1";
+let annotations = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+if (!annotations || Object.keys(annotations).length === 0) {
+  // First open (or after Clear all): seed from pre-annotations.
+  annotations = JSON.parse(JSON.stringify(DEFAULTS));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+}
+let flatList = [];   // [{task, page, idx}]
+let cursor = -1;
+
+MANIFEST.forEach(t => t.pages.forEach(p => flatList.push({task: t.task, page: p})));
+
+// ===== render task tree =====
+const taskList = document.getElementById("taskList");
+function renderTaskTree() {
+  taskList.innerHTML = "";
+  MANIFEST.forEach(t => {
+    const det = document.createElement("details");
+    det.className = "task";
+    det.open = true;
+    const sum = document.createElement("summary");
+    const done = t.pages.filter(p => annotations[`${t.task}/${p}`]?.type).length;
+    const total = t.pages.length;
+    sum.innerHTML = `<span>${t.task}</span><span class="progress ${done===total?'done':''}">${done}/${total}</span>`;
+    det.appendChild(sum);
+    const ul = document.createElement("ul");
+    t.pages.forEach(p => {
+      const li = document.createElement("li");
+      li.dataset.task = t.task; li.dataset.page = p;
+      const ann = annotations[`${t.task}/${p}`];
+      const badge = ann?.type
+        ? `<span class="badge" style="background:var(--t-${ann.type})">${ann.type}</span>` : "";
+      li.innerHTML = `<span>${p.replace(/\.png$/, "")}</span>${badge}`;
+      li.onclick = () => loadPage(t.task, p);
+      ul.appendChild(li);
+    });
+    det.appendChild(ul);
+    taskList.appendChild(det);
+  });
+  updateStats();
+}
+
+function updateStats() {
+  const total = flatList.length;
+  const done = flatList.filter(x => annotations[`${x.task}/${x.page}`]?.type).length;
+  document.getElementById("stat-done").textContent = done;
+  document.getElementById("stat-total").textContent = total;
+  document.getElementById("stat-pct").textContent = total ? `${Math.round(done/total*100)}%` : "0%";
+}
+
+// ===== load a page =====
+function loadPage(task, page) {
+  cursor = flatList.findIndex(x => x.task === task && x.page === page);
+  document.querySelectorAll("aside.tasks li").forEach(li =>
+    li.classList.toggle("active", li.dataset.task === task && li.dataset.page === page));
+  // image
+  const viewer = document.getElementById("viewer");
+  const url = `../${task}/pages/${page}`;
+  viewer.innerHTML = `<div class="meta">${task} · ${page}</div><img src="${url}" alt="${page}">`;
+  // panel
+  document.getElementById("curPage").textContent = `${task} / ${page.replace(/\.png$/, "")}`;
+  const key = `${task}/${page}`;
+  const ann = annotations[key] || {};
+  document.querySelectorAll("#typeButtons button").forEach(b =>
+    b.classList.toggle("active", b.dataset.type === ann.type));
+  document.getElementById("routePattern").value = ann.route ?? autoRoute(page, ann.type);
+  document.getElementById("sampleUrl").value    = ann.sample ?? autoSample(page, ann.type, ann.route);
+  document.getElementById("notes").value        = ann.notes  ?? "";
+}
+
+// ===== auto suggestions =====
+function pageSlug(filename) {
+  // 05_Product_Page.png → product-page
+  return filename.replace(/\.png$/, "")
+                 .replace(/^\d+_?/, "")
+                 .toLowerCase()
+                 .replace(/_/g, "-");
+}
+function autoRoute(filename, type) {
+  const slug = pageSlug(filename);
+  switch (type) {
+    case "singleton": return `/${slug}`;
+    case "detail":    return `/${slug.replace(/-page$|-detail$|-view$|-single$/,"") + "s"}/:id`;
+    case "archive":   return `/${slug}/:slug`;
+    case "list":      return `/${slug}`;
+    case "form":      return `/${slug}`;
+    case "modal":     return "(no URL)";
+    default:          return "";
+  }
+}
+function autoSample(filename, type, route) {
+  const r = route || autoRoute(filename, type);
+  if (!r || r === "(no URL)") return r;
+  // /products/:id → /products/1; /category/:slug → /category/sample
+  return r.replace(/:id\b/g, "1").replace(/:[a-z_-]+/gi, "sample");
+}
+
+// ===== save current panel state =====
+function saveCurrent(activeType) {
+  if (cursor < 0) return;
+  const {task, page} = flatList[cursor];
+  const key = `${task}/${page}`;
+  annotations[key] = {
+    type:   activeType ?? annotations[key]?.type ?? null,
+    route:  document.getElementById("routePattern").value.trim(),
+    sample: document.getElementById("sampleUrl").value.trim(),
+    notes:  document.getElementById("notes").value.trim(),
+  };
+  if (!annotations[key].type) delete annotations[key];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+  renderTaskTree();  // re-render badges + progress
+  // re-highlight
+  document.querySelectorAll("aside.tasks li").forEach(li =>
+    li.classList.toggle("active", li.dataset.task === task && li.dataset.page === page));
+}
+
+// ===== type button handler =====
+document.querySelectorAll("#typeButtons button").forEach(btn => {
+  btn.onclick = () => {
+    const t = btn.dataset.type;
+    document.querySelectorAll("#typeButtons button").forEach(b => b.classList.toggle("active", b === btn));
+    // refresh route/sample defaults if empty
+    const pattern = document.getElementById("routePattern");
+    const sample  = document.getElementById("sampleUrl");
+    const {page} = flatList[cursor] || {};
+    if (page && !pattern.value) pattern.value = autoRoute(page, t);
+    if (page && !sample.value)  sample.value  = autoSample(page, t, pattern.value);
+    saveCurrent(t);
+  };
+});
+
+// ===== inputs auto-save =====
+["routePattern","sampleUrl","notes"].forEach(id => {
+  document.getElementById(id).addEventListener("blur", () => saveCurrent());
+});
+
+// ===== nav buttons & keyboard =====
+function move(d) {
+  const next = Math.max(0, Math.min(flatList.length - 1, cursor + d));
+  if (next === cursor) return;
+  const {task, page} = flatList[next];
+  loadPage(task, page);
+}
+document.getElementById("prev").onclick = () => move(-1);
+document.getElementById("next").onclick = () => move(+1);
+document.addEventListener("keydown", (e) => {
+  if (["INPUT","TEXTAREA"].includes(e.target.tagName)) return;
+  if (e.key === "j" || e.key === "ArrowDown")  { e.preventDefault(); move(+1); }
+  if (e.key === "k" || e.key === "ArrowUp")    { e.preventDefault(); move(-1); }
+  const map = {"1":"singleton","2":"detail","3":"archive","4":"list","5":"form","6":"modal"};
+  if (map[e.key]) {
+    document.querySelector(`#typeButtons button[data-type="${map[e.key]}"]`).click();
+  }
+});
+
+// ===== export / import / clear =====
+document.getElementById("exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(annotations, null, 2)], {type: "application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "page_types.json";
+  a.click();
+};
+document.getElementById("importBtn").onclick = () => document.getElementById("importFile").click();
+document.getElementById("importFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  try {
+    annotations = JSON.parse(text);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+    renderTaskTree();
+    if (cursor >= 0) loadPage(flatList[cursor].task, flatList[cursor].page);
+  } catch (err) { alert("Bad JSON: " + err); }
+};
+document.getElementById("clearBtn").onclick = () => {
+  if (confirm("Clear ALL annotations? (Use 'Reset to pre-anno' if you want the auto-classified starting set instead.)")) {
+    annotations = {};
+    localStorage.removeItem(STORAGE_KEY);
+    renderTaskTree();
+    if (cursor >= 0) loadPage(flatList[cursor].task, flatList[cursor].page);
+  }
+};
+document.getElementById("resetDefaultsBtn").onclick = () => {
+  if (confirm("Discard your edits and reset every page to the auto-classified pre-annotations?")) {
+    annotations = JSON.parse(JSON.stringify(DEFAULTS));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(annotations));
+    renderTaskTree();
+    if (cursor >= 0) loadPage(flatList[cursor].task, flatList[cursor].page);
+  }
+};
+
+// ===== bootstrap =====
+renderTaskTree();
+if (flatList.length) loadPage(flatList[0].task, flatList[0].page);
+</script>
+</body>
+</html>

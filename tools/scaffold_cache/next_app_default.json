@@ -1,0 +1,91 @@
+{
+  "command": "npx -y create-next-app@latest {project} --ts --tailwind --eslint --app --no-src-dir --import-alias '@/*' --use-npm --skip-install",
+  "description": "Default Next.js App Router with TS + Tailwind (most common)",
+  "elapsed_s": 0.5,
+  "file_count": 19,
+  "files": {
+    ".gitignore": {
+      "sha256": "207e265ff4901f9ad9f96d8ce08530e04f9fc600815472a66d0a446096d654cd",
+      "size": 480
+    },
+    "AGENTS.md": {
+      "sha256": "e3447d84251880fb34cfae09131cb4c57471529bbfe60976a3245793cf621627",
+      "size": 327
+    },
+    "CLAUDE.md": {
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "size": 11
+    },
+    "README.md": {
+      "sha256": "60b55ff7df79af72590f9524208e46642bc32bdc175cdad41349681c0e2f958f",
+      "size": 1450
+    },
+    "app/favicon.ico": {
+      "sha256": "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932",
+      "size": 25931
+    },
+    "app/globals.css": {
+      "sha256": "769edf77bd0d101a2d26e6c5656defba8cd885ff37d92279fa293a2756fe5651",
+      "size": 488
+    },
+    "app/layout.tsx": {
+      "sha256": "b98a24027c5c78385b127baf3c2f4f29b18c2c8c19c0beed8c74bb57bd98e4ef",
+      "size": 719
+    },
+    "app/page.tsx": {
+      "sha256": "359fd0c734c7632e73f8299501bda0765a07ab36d0e26e42d92cc93f6ba983c2",
+      "size": 2882
+    },
+    "eslint.config.mjs": {
+      "sha256": "870f1adccecf3051cbcd9fd307cef51d7633cf510979c181a81f4b1797273493",
+      "size": 465
+    },
+    "next-env.d.ts": {
+      "sha256": "7b550dda9686c16f36a17bf9051d5dbf31e98555b30d114ac49fc49a1e712651",
+      "size": 247
+    },
+    "next.config.ts": {
+      "sha256": "614bce25b089c3f19b1e17a6346c74b858034040154c6621e7d35303004767cc",
+      "size": 133
+    },
+    "package.json": {
+      "sha256": "4406ef47328e8c1407e4477b12f1c267df23effa5c56e3360f3a5ae011abd21a",
+      "size": 536
+    },
+    "postcss.config.mjs": {
+      "sha256": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde",
+      "size": 94
+    },
+    "public/file.svg": {
+      "sha256": "2b67812c325c199a02536cdbeea0c593a72f707d323b72ee3e08dbab06753bd4",
+      "size": 391
+    },
+    "public/globe.svg": {
+      "sha256": "b614b9bf183925957661ac851498fe1d8029fd43a62fbfed86f9e2624a57e7cf",
+      "size": 1035
+    },
+    "public/next.svg": {
+      "sha256": "55995dfad6ecb4945a1e856ddca03c5e16aa5bf13fd21b4df6a74ae79357bcfc",
+      "size": 1375
+    },
+    "public/vercel.svg": {
+      "sha256": "f081337b2fee635b455b63275406a3e7f39d6a014e25ad90dab5a67e62a12ac4",
+      "size": 128
+    },
+    "public/window.svg": {
+      "sha256": "644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1",
+      "size": 385
+    },
+    "tsconfig.json": {
+      "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3",
+      "size": 666
+    }
+  },
+  "framework": "nextjs",
+  "generated_at": "2026-05-04T21:31:19.005908+00:00",
+  "key": "next_app_default",
+  "match_patterns": [
+    "create-next-app@latest --ts --tailwind --eslint --app",
+    "create-next-app@latest"
+  ]
+}

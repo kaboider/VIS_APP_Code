@@ -1,0 +1,88 @@
+{
+  "command": "npx -y create-vite@latest {project} --template react-ts",
+  "description": "Vite + React + TypeScript",
+  "elapsed_s": 0.5,
+  "file_count": 18,
+  "files": {
+    ".gitignore": {
+      "sha256": "fe718e7babb14f3cbad2d97f08889b9ce5215ed3fe0e43b2b8cfbfb3b9b844e8",
+      "size": 253
+    },
+    "README.md": {
+      "sha256": "8dc9e0ee2281acb3324624fbe6eb7e1377cc626f616ea4dc90e3a90ae094374d",
+      "size": 2425
+    },
+    "eslint.config.js": {
+      "sha256": "cf80a7510234dcd5ae594b30b44682b8b45ba13c0fcb5bf8928bea143802aa1c",
+      "size": 591
+    },
+    "index.html": {
+      "sha256": "c1ffdaa2103076e145a86c474ec9be0303b5434ab962ecd7b1cd35d1aa48b83e",
+      "size": 366
+    },
+    "package.json": {
+      "sha256": "9678f4bd9e1f68817ef813a74ac8e2ae2ea10991b118ec26b1d1475605ce318e",
+      "size": 716
+    },
+    "public/favicon.svg": {
+      "sha256": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
+      "size": 9522
+    },
+    "public/icons.svg": {
+      "sha256": "b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a",
+      "size": 5031
+    },
+    "src/App.css": {
+      "sha256": "6e25a776d3e8102da5bacb3cb99f4a5fc662a2e01e6143140671a556d28c3d5c",
+      "size": 2891
+    },
+    "src/App.tsx": {
+      "sha256": "62338c59cc9ef09796ab18a5568242661a74c75930b7bf53eaa653f4ec0a6157",
+      "size": 3646
+    },
+    "src/assets/hero.png": {
+      "sha256": "881ffbcaafc212e49addad08846a5b82761355fa20624253af3477ba33262c5c",
+      "size": 13057
+    },
+    "src/assets/react.svg": {
+      "sha256": "35ef61ed53b323ae94a16a8ec659b3d0af3880698791133f23b084085ab1c2e5",
+      "size": 4126
+    },
+    "src/assets/vite.svg": {
+      "sha256": "5be21acd42eb7b896e517f4e0f0f11eb5c5d9e54fbbcebe9453f033008fcca6f",
+      "size": 8709
+    },
+    "src/index.css": {
+      "sha256": "535c25dd1f338486ab3678832fc698011c8b8d1fe4ffd3d0ef5e33181457cc9f",
+      "size": 2169
+    },
+    "src/main.tsx": {
+      "sha256": "6e9e5807fcbd48b75a96db5cbef36c996262196be42e6d4760dc86babbe61ad2",
+      "size": 230
+    },
+    "tsconfig.app.json": {
+      "sha256": "b1eac9ba6cd1c01d59ebca159805e052c798d9d4ab904680b79ce3e306ea0bbd",
+      "size": 617
+    },
+    "tsconfig.json": {
+      "sha256": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808",
+      "size": 119
+    },
+    "tsconfig.node.json": {
+      "sha256": "90a22c920cbc14624fb4658b58f15c875abf3234224f3933f211849c3ada3242",
+      "size": 591
+    },
+    "vite.config.ts": {
+      "sha256": "4d36db3522a7b2dd10e0936e1004373c7ee65f10f7cd7920cd76410459c15a45",
+      "size": 161
+    }
+  },
+  "framework": "vite",
+  "generated_at": "2026-05-04T22:34:06.037410+00:00",
+  "key": "vite_react_ts",
+  "match_patterns": [
+    "create vite@latest",
+    "create-vite@latest",
+    "vite@latest"
+  ]
+}

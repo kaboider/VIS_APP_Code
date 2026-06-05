@@ -1,0 +1,47 @@
+{
+  "command": "echo n | npx -y nuxi@latest init {project} --template minimal --packageManager npm --no-install --no-gitInit",
+  "description": "Nuxt 3 default (nuxi minimal template; 'echo n' answers the post-init modules prompt)",
+  "elapsed_s": 1.7,
+  "file_count": 8,
+  "files": {
+    ".gitignore": {
+      "sha256": "730800e1bac6230e6fdd6476a28a38f95df38c798eb413b586e6bf6e34267c67",
+      "size": 193
+    },
+    "README.md": {
+      "sha256": "4e97c282b059d72bdac1975485a6e6bc262caded17a53dad1171d62b9b9c1e1e",
+      "size": 822
+    },
+    "app/app.vue": {
+      "sha256": "e745810823a1b285d65e1912edff0175ab3c1acf0fd591d57edb4ce6db83c856",
+      "size": 87
+    },
+    "nuxt.config.ts": {
+      "sha256": "8e9e305203eae1f89b19e8d22ceaa7f5d70139badc71e0c9fc585411edff38d1",
+      "size": 157
+    },
+    "package.json": {
+      "sha256": "51bc7ad876dfb53a6f3df110b81d779969ec9b17d03597a7e06a052f572939b5",
+      "size": 334
+    },
+    "public/favicon.ico": {
+      "sha256": "1057b17aec08a7191d134000203947f195a8aa7c84c39f1164cee8d01279762a",
+      "size": 4286
+    },
+    "public/robots.txt": {
+      "sha256": "e1f21c9aa28d50ca112ed357f34b67c550597effd4d42fd55b4e27300dd8f9c1",
+      "size": 24
+    },
+    "tsconfig.json": {
+      "sha256": "5dcf8b6d48da0438811c1b22d010604192d0898742331bcee8cf7998e1a1ff45",
+      "size": 320
+    }
+  },
+  "framework": "nuxt",
+  "generated_at": "2026-05-04T21:49:15.131498+00:00",
+  "key": "nuxt_default",
+  "match_patterns": [
+    "nuxi@latest init",
+    "nuxi init"
+  ]
+}
