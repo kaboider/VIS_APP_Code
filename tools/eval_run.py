@@ -54,7 +54,7 @@ try:
 except ImportError:
     print("ERROR: Pillow required. pip install Pillow", file=sys.stderr); sys.exit(2)
 try:
-    from playwright.sync_api import sync_playwright, Page, Locator, ElementHandle, TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright, Page, Locator, ElementHandle, TimeoutError as PWTimeout, Error as PWError
 except ImportError:
     print("ERROR: playwright required. pip install playwright && playwright install chromium",
           file=sys.stderr); sys.exit(2)
@@ -724,31 +724,40 @@ def parse_readme_pages(workspace: Path, page_names: list[str]) -> dict[str, str]
         mn = re.match(r"^(\d+)_", name)
         if mn:
             n_to_name[int(mn.group(1))] = name
-    # Parse markdown table rows. Capture URL cell verbatim (any non-pipe chars).
+    # Parse markdown table rows. The table may have any number of columns
+    # (e.g. `| # | URL |` OR `| # | Page | URL |`), so don't assume the URL is
+    # in a fixed column — scan all cells in the row and pick the one that, after
+    # stripping markdown wrappers, looks like a URL path (starts with '/').
+    def _clean_cell(c: str) -> str:
+        u = c.strip()
+        if u.startswith("`") and u.endswith("`"):
+            u = u[1:-1].strip()
+        link_m = re.match(r"\[[^\]]*\]\(([^)]+)\)", u)   # [text](/foo) → /foo
+        if link_m:
+            u = link_m.group(1).strip()
+        if (u.startswith('"') and u.endswith('"')) or (u.startswith("'") and u.endswith("'")):
+            u = u[1:-1]
+        return u
+
     out: dict[str, str] = {}
     skipped_rows = 0
     for line in section.splitlines():
-        m = re.match(r"^\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|", line)
-        if not m:
+        if "|" not in line:
             continue
-        url_raw = m.group(2).strip()
-        # Strip common markdown wrappers
-        url = url_raw
-        # backticks: `/foo` → /foo
-        if url.startswith("`") and url.endswith("`"):
-            url = url[1:-1].strip()
-        # markdown link [text](/foo) → /foo
-        link_m = re.match(r"\[[^\]]*\]\(([^)]+)\)", url)
-        if link_m:
-            url = link_m.group(1).strip()
-        # Strip surrounding quotes too
-        if (url.startswith('"') and url.endswith('"')) or (url.startswith("'") and url.endswith("'")):
-            url = url[1:-1]
-        # Validate
-        if not url.startswith("/"):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 2 or not re.fullmatch(r"\d+", cells[0]):
+            continue  # skips header (`| Page # | …`) and separator (`|---|`) rows
+        page_num = int(cells[0])
+        # Find the URL-looking cell among the remaining columns.
+        url = None
+        for cell in cells[1:]:
+            u = _clean_cell(cell)
+            if u.startswith("/"):
+                url = u
+                break
+        if url is None:
             skipped_rows += 1
             continue
-        page_num = int(m.group(1))
         name = n_to_name.get(page_num)
         if name:
             out[name] = url
@@ -1761,13 +1770,27 @@ def check_navigate(page: Page, cand: dict, ann: dict, base_url: str) -> tuple[fl
             return 0.5, f"navigated to {end_url} but target was {target_name}"
         return 0.7, f"navigated to {end_url}; navigateTo.name not specified"
 
-    # No URL change. Two reasons it might still be partially OK:
+    # No URL change *yet*. Two reasons it might still be partially OK:
     #  (a) it's an in-page filter/sort that the user mistakenly typed as `navigate`
     #  (b) it opened a modal / dialog (a navigate-equivalent UX)
-    end_html_len = page.evaluate("document.documentElement.outerHTML.length")
-    dialog_present = page.evaluate(
-        "document.querySelectorAll('[role=\"dialog\"],[aria-modal=\"true\"]').length"
-    )
+    # The probes below run page.evaluate(); if a slow client-side navigation is
+    # still in flight the execution context gets destroyed mid-eval. Treat that
+    # as evidence a navigation did happen rather than crashing the whole run.
+    try:
+        end_html_len = page.evaluate("document.documentElement.outerHTML.length")
+        dialog_present = page.evaluate(
+            "document.querySelectorAll('[role=\"dialog\"],[aria-modal=\"true\"]').length"
+        )
+    except PWError:
+        end_url = page.url
+        if end_url != start_url:
+            if target_name:
+                for cand_path in candidate_url_paths(target_name):
+                    if cand_path in end_url or end_url.endswith(cand_path):
+                        return 1.0, f"navigated to {end_url} (matches {target_name})"
+                return 0.5, f"navigated to {end_url} but target was {target_name}"
+            return 0.7, f"navigated to {end_url}; navigateTo.name not specified"
+        return 0.7, "navigation in progress (execution context destroyed mid-probe)"
     if dialog_present:
         return 0.5, f"opened a dialog instead of navigating ({dialog_present} dialogs)"
     if abs(end_html_len - start_html_len) > 500:

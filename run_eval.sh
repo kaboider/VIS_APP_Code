@@ -102,8 +102,18 @@ case "$CLI" in
     EXTRA_PROBE_PATHS=("$HOME/.gemini/antigravity-cli/bin/agy")
     INSTALL_HINT="Install the Antigravity CLI so 'agy' is on PATH (default ~/.local/bin/agy); run 'agy' once to sign in. List models with 'agy models'."
     ;;
+  cursor)
+    # Cursor Agent CLI (`cursor-agent`). Composer is Cursor's own model family;
+    # `composer-2.5` is the slug (composer-2.5-fast is Cursor's default).
+    # Auth is subscription login (`cursor-agent login`) OR CURSOR_API_KEY.
+    : "${MODEL:=composer-2.5}"
+    BIN_NAME="cursor-agent"
+    BIN_VAR="CURSOR_BIN"
+    EXTRA_PROBE_PATHS=("$HOME/.local/bin/cursor-agent" "$HOME/.cursor/bin/cursor-agent")
+    INSTALL_HINT="curl https://cursor.com/install -fsS | bash   (then run 'cursor-agent login' once)"
+    ;;
   *)
-    echo "Unknown --cli '$CLI' (expected: claude, codex, gemini, antigravity)" >&2
+    echo "Unknown --cli '$CLI' (expected: claude, codex, gemini, antigravity, cursor)" >&2
     exit 1
     ;;
 esac
@@ -164,7 +174,8 @@ echo "CLI version:      ${CLI_VERSION:-unknown}" >&2
 
 # ---------- paths ----------
 TASKS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # anchor_tasks/web/tasks
-RUNS_ROOT="$TASKS_ROOT/_runs"
+# Allow override via env var for custom runs directories
+RUNS_ROOT="${RUNS_ROOT:-$TASKS_ROOT/_runs}"
 
 # Each c-variant folder is now self-contained: it owns its own description.md,
 # pages/, etc. The shared anchor folder ($TASKS_ROOT/$TASK) is NOT used for
@@ -467,6 +478,7 @@ case "$CLI" in
       --append-system-prompt "$(cat "$RUNTIME_PROMPT")" \
       --add-dir "$RUN_DIR/inputs" \
       --dangerously-skip-permissions \
+      --disallowed-tools ScheduleWakeup \
       --output-format stream-json \
       --verbose \
       -p "$USER_PROMPT" \
@@ -563,16 +575,104 @@ $USER_PROMPT"
       | tee "$ANTIGRAVITY_LOG_PATH"
     EXIT=${PIPESTATUS[0]}
     ;;
+  cursor)
+    # Cursor Agent CLI (`cursor-agent`) — headless surface mirrors Claude Code:
+    #   -p                          : print / non-interactive (full tool access)
+    #   --force                     : auto-approve every command (docker/npm/etc.)
+    #   --trust                     : trust the workspace without prompting (headless)
+    #   --workspace                 : project root (we also cd in, belt + braces)
+    #   --output-format stream-json : event envelope is Claude-shaped
+    #                                 (type: system/user/assistant/result w/ is_error)
+    # No --append-system-prompt and no --add-dir, so: (a) prepend the system
+    # prompt to the user prompt (like codex/gemini), and (b) let the agent read
+    # ../inputs/ directly — verified headless can read sibling dirs without
+    # --add-dir. Because the envelope is Claude-shaped we tee to the SAME
+    # events.jsonl and reuse analyze_run.py / analyze_edits.py below.
+    # Unset CURSOR_API_KEY so the subscription login token is used, not a stray
+    # env key (mirrors the claude branch unsetting ANTHROPIC_API_KEY).
+    COMBINED_PROMPT="$(cat "$RUNTIME_PROMPT")
+
+---
+
+$USER_PROMPT"
+    # cursor-agent headless does NOT reliably terminate. Observed repeatedly:
+    # the agent finishes ALL work (builds the app, runs `docker compose up` to
+    # self-verify, delivers its final summary message) but then cursor-agent
+    # FAILS to emit the terminal `result` event and never exits — it sits at 0%
+    # CPU indefinitely (a self-launched `docker compose up` can also keep the
+    # stdout pipe open). A blunt wall-clock `timeout` would waste 45m per task.
+    # So we use an INACTIVITY watchdog: cursor-agent streams events continuously
+    # while working, so once events.jsonl stops growing for CURSOR_IDLE_KILL
+    # seconds the agent is done-or-wedged — kill the cursor-agent process tree,
+    # which closes the pipe so tee EOFs and analysis proceeds normally (verified:
+    # killing cursor-agent lets run_eval finalize cleanly). CURSOR_TIMEOUT is a
+    # secondary hard wall-clock cap. stdin from /dev/null so it never blocks on a
+    # prompt. The cursor-agent cmdline contains the unique RUN_ID (via
+    # --workspace), so pkill -f scopes the kill to THIS run (concurrency-safe).
+    CURSOR_IDLE_KILL="${CURSOR_IDLE_KILL:-180}"
+    CURSOR_TIMEOUT="${CURSOR_TIMEOUT:-45m}"
+    TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+    ( cd "$RUN_DIR/workspace" && unset CURSOR_API_KEY && \
+        ${TIMEOUT_BIN:+"$TIMEOUT_BIN" -k 30s "$CURSOR_TIMEOUT"} "$BIN" \
+        -p \
+        --model "$MODEL" \
+        --force \
+        --trust \
+        --workspace "$RUN_DIR/workspace" \
+        --output-format stream-json \
+        "$COMBINED_PROMPT" \
+        < /dev/null \
+        2>"$RUN_DIR/logs/cursor.stderr.log" ) \
+      | python3 -u "$TOOLS_DIR/tee_jsonl.py" "$EVENTS_PATH" &
+    PIPELINE_PID=$!
+    (
+      while kill -0 "$PIPELINE_PID" 2>/dev/null; do
+        sleep 15
+        [[ -f "$EVENTS_PATH" ]] || continue
+        idle=$(python3 -c "import os,time;print(int(time.time()-os.path.getmtime('$EVENTS_PATH')))" 2>/dev/null || echo 0)
+        if [[ "${idle:-0}" -gt "$CURSOR_IDLE_KILL" ]]; then
+          echo "[run_eval] cursor-agent idle ${idle}s (>${CURSOR_IDLE_KILL}s) — agent done or wedged; terminating its process tree" >&2
+          pkill -TERM -f "cursor-agent.*$RUN_ID" 2>/dev/null || true
+          sleep 4
+          pkill -KILL -f "cursor-agent.*$RUN_ID" 2>/dev/null || true
+          break
+        fi
+      done
+    ) &
+    WATCHDOG_PID=$!
+    wait "$PIPELINE_PID"; EXIT=$?
+    kill "$WATCHDOG_PID" 2>/dev/null || true
+    ;;
 esac
 set -e
 
 # Post-run analysis: structured event streams are post-processed into
 # summaries and edit profiles where supported.
-if [[ "$CLI" == "claude" ]]; then
+if [[ "$CLI" == "claude" || "$CLI" == "cursor" ]]; then
+  # cursor-agent emits a Claude-shaped stream-json envelope into the same
+  # events.jsonl, so the claude analyzers work unchanged.
   python3 "$TOOLS_DIR/analyze_run.py"   "$RUN_DIR" \
     || echo "(analyze_run.py failed; events.jsonl is intact)"
   python3 "$TOOLS_DIR/analyze_edits.py" "$RUN_DIR" \
     || echo "(analyze_edits.py failed; events.jsonl is intact)"
+  # cursor-specific finalize: (1) map the result-event usage (camelCase, only on
+  # the terminal `result` event) into summary.json's tokens block — analyze_run.py
+  # leaves them zero because cursor doesn't put usage on per-assistant messages;
+  # (2) when the inactivity watchdog killed cursor-agent before it emitted
+  # `result`, promote is_error null → false if the work is clearly present
+  # (workspace has docker-compose.yml + an assistant message). Idempotent.
+  if [[ "$CLI" == "cursor" ]]; then
+    python3 "$TOOLS_DIR/cursor_finalize.py" "$RUN_DIR" \
+      || echo "(cursor_finalize.py skipped)"
+    # The inactivity watchdog kills cursor-agent with a non-zero exit even when
+    # the agent had already finished successfully (it just never self-exited).
+    # If finalize confirmed the work (summary.is_error == false), force EXIT=0
+    # so run_all.sh records the run as the success it is instead of FAILED.
+    if python3 -c "import json,sys;sys.exit(0 if json.load(open('$RUN_DIR/logs/summary.json'))['summary'].get('is_error') is False else 1)" 2>/dev/null; then
+      [[ "$EXIT" != "0" ]] && echo "[run_eval] cursor: work succeeded (is_error=false); overriding watchdog exit $EXIT → 0" >&2
+      EXIT=0
+    fi
+  fi
 elif [[ "$CLI" == "codex" ]]; then
   python3 "$TOOLS_DIR/analyze_codex_run.py" "$RUN_DIR" \
     || echo "(analyze_codex_run.py failed; codex_events.jsonl is intact)"
@@ -619,6 +719,14 @@ case "$CLI" in
   antigravity)
     echo "  transcript:     $ANTIGRAVITY_LOG_PATH  (plain-text agent narration)"
     echo "  stderr:         $ANTIGRAVITY_STDERR_PATH"
+    ;;
+  cursor)
+    echo "  events (raw):   $EVENTS_PATH"
+    echo "  stderr:         $RUN_DIR/logs/cursor.stderr.log"
+    echo "  summary:        $RUN_DIR/logs/summary.md"
+    echo "  turn-by-turn:   $RUN_DIR/logs/turns.csv"
+    echo "  transcript:     $RUN_DIR/logs/transcript.md"
+    echo "  edit profile:   $RUN_DIR/logs/edits.md  (+ edits.jsonl)"
     ;;
 esac
 echo "  meta:           $RUN_DIR/meta.json"
