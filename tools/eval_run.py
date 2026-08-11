@@ -1748,54 +1748,82 @@ def click_safely(page: Page, cand: dict) -> bool:
         return False
 
 
-def check_navigate(page: Page, cand: dict, ann: dict, base_url: str) -> tuple[float, str]:
-    start_url = page.url
-    start_html_len = page.evaluate("document.documentElement.outerHTML.length")
+# =============================================================================
+# UPDATE 2026-07-28 — navigation probe: URL-based  →  content-based criterion
+# -----------------------------------------------------------------------------
+# WHAT CHANGED: check_navigate() below no longer scores a navigation by whether
+#   the URL string changed. It now tokenizes the visible page text and compares
+#   word-sets before/after the click (and against the app home page). A no-op or
+#   a silent revert-to-home fails; an observable content change passes.
+# WHY: a blind human audit (24 behavior anchors, 3 raters, before/after
+#   interaction screenshots, inter-rater agreement 92%) found the old URL-only
+#   test agreed with human judgment only 50% (Cohen's kappa = -0.20). SPA routing
+#   breaks it in both directions: (a) content-navigation swaps the page WITHOUT a
+#   URL change (false negatives); (b) the URL changes to a path that nonetheless
+#   renders a fallback/home page (false positives). The content criterion here
+#   raised probe–human agreement to 88% (kappa = 0.68, substantial).
+# SOURCE: ported verbatim (thresholds unchanged) from the validated reference
+#   rebuttal/humaneval/behavior/rescore_behavior.py :: content_verdict().
+# SCORING: binary 0.0 / 1.0 (matches the validated criterion); the older graded
+#   tiers (0.3 / 0.5 / 0.7) and the navigateTo-name/candidate_url_paths matching
+#   are intentionally dropped — the criterion is target-free by design.
+# SCOPE: evaluator code only. Table behavior numbers in the paper are NOT
+#   re-computed here; a full re-run is required to refresh them.
+# =============================================================================
+_NAV_WORD_RE = re.compile(r"[A-Za-z一-鿿]{2,}")
+
+def _visible_words(page: Page) -> set[str]:
+    """Word-set of the page's visible body text (lower-cased, ≥2 chars). Returns
+    an empty set if the body is unavailable or the execution context is gone."""
+    try:
+        text = page.evaluate("() => document.body ? document.body.innerText : ''") or ""
+    except Exception:
+        return set()
+    return {w.lower() for w in _NAV_WORD_RE.findall(text[:6000])}
+
+def _jaccard(a: set, b: set) -> float:
+    if not a and not b: return 1.0
+    if not a or not b:  return 0.0
+    return len(a & b) / len(a | b)
+
+
+def check_navigate(page: Page, cand: dict, ann: dict, base_url: str,
+                   home_words: Optional[set] = None) -> tuple[float, str]:
+    """A navigate anchor succeeds iff the click produces the corresponding
+    observable content change. A no-op (page text essentially unchanged) or a
+    silent revert to the home page fails — regardless of whether the URL string
+    changed. `home_words` is the home page's word-set, captured once per run; when
+    it is None the home-revert check is skipped (the no-op check still applies)."""
+    home = home_words or set()
     target_name = (ann.get("navigateTo") or {}).get("name")
+    before = _visible_words(page)
     if not click_safely(page, cand):
         return 0.0, "click failed"
     try:
         page.wait_for_load_state("domcontentloaded", timeout=4000)
     except PWTimeout:
         pass
-    # SPA routers (Next.js, React Router) update URL via history.pushState
-    # asynchronously; give them a moment to settle.
+    # SPA routers (Next.js, React Router) update via history.pushState / async
+    # re-render; give them a moment to settle before reading the new content.
     time.sleep(0.4)
+    after = _visible_words(page)  # empty if a slow nav destroyed the context (→ Jab≈0, counts as a change)
     end_url = page.url
-    if end_url != start_url:
-        if target_name:
-            for cand_path in candidate_url_paths(target_name):
-                if cand_path in end_url or end_url.endswith(cand_path):
-                    return 1.0, f"navigated to {end_url} (matches {target_name})"
-            return 0.5, f"navigated to {end_url} but target was {target_name}"
-        return 0.7, f"navigated to {end_url}; navigateTo.name not specified"
 
-    # No URL change *yet*. Two reasons it might still be partially OK:
-    #  (a) it's an in-page filter/sort that the user mistakenly typed as `navigate`
-    #  (b) it opened a modal / dialog (a navigate-equivalent UX)
-    # The probes below run page.evaluate(); if a slow client-side navigation is
-    # still in flight the execution context gets destroyed mid-eval. Treat that
-    # as evidence a navigation did happen rather than crashing the whole run.
-    try:
-        end_html_len = page.evaluate("document.documentElement.outerHTML.length")
-        dialog_present = page.evaluate(
-            "document.querySelectorAll('[role=\"dialog\"],[aria-modal=\"true\"]').length"
-        )
-    except PWError:
-        end_url = page.url
-        if end_url != start_url:
-            if target_name:
-                for cand_path in candidate_url_paths(target_name):
-                    if cand_path in end_url or end_url.endswith(cand_path):
-                        return 1.0, f"navigated to {end_url} (matches {target_name})"
-                return 0.5, f"navigated to {end_url} but target was {target_name}"
-            return 0.7, f"navigated to {end_url}; navigateTo.name not specified"
-        return 0.7, "navigation in progress (execution context destroyed mid-probe)"
-    if dialog_present:
-        return 0.5, f"opened a dialog instead of navigating ({dialog_present} dialogs)"
-    if abs(end_html_len - start_html_len) > 500:
-        return 0.3, f"DOM mutated significantly ({start_html_len}→{end_html_len}); likely in-page state, not nav"
-    return 0.0, f"no URL change after click; remained at {end_url}"
+    Jab = _jaccard(after, before)   # after vs before-click source page
+    Jah = _jaccard(after, home)     # after vs home
+    Jbh = _jaccard(before, home)    # before vs home
+
+    tgt = (target_name or "").lower()
+    target_is_home = tgt in ("home", "homepage", "landing", "index") \
+        or end_url.rstrip("/") == base_url.rstrip("/")
+
+    if Jab >= 0.90:
+        return 0.0, f"no observable content change (Jab={Jab:.2f}); not a real navigation"
+    if home and target_is_home and Jah >= 0.70:
+        return 1.0, f"reached the intended home page (Jah={Jah:.2f})"
+    if home and Jbh < 0.75 and Jah >= 0.80:
+        return 0.0, f"reverted to the home page (Jah={Jah:.2f}); target was {target_name!r}"
+    return 1.0, f"navigated to a different page (Jab={Jab:.2f}; url={end_url})"
 
 
 def check_input(page: Page, cand: dict, ann: dict) -> tuple[float, str]:
@@ -1942,9 +1970,10 @@ def check_generic_click(page: Page, cand: dict, ann: dict) -> tuple[float, str]:
         return 0.0, f"click threw: {e}"
 
 
-def run_behavior_check(page: Page, cand: dict, ann: dict, base_url: str) -> tuple[float, str]:
+def run_behavior_check(page: Page, cand: dict, ann: dict, base_url: str,
+                       home_words: Optional[set] = None) -> tuple[float, str]:
     t = ann.get("type"); st = ann.get("subtype")
-    if t == "navigate": return check_navigate(page, cand, ann, base_url)
+    if t == "navigate": return check_navigate(page, cand, ann, base_url, home_words)
     if t == "input":    return check_input(page, cand, ann)
     if t == "toggle":   return check_toggle(page, cand, ann)
     if t == "click":
@@ -2018,10 +2047,18 @@ def main() -> int:
     # backward compat with old runs that staged them under inputs/.
     interaction_dir = inputs / "interaction"
     if not interaction_dir.is_dir() or not any(interaction_dir.glob("*_human_interaction_annotation.json")):
-        anchor_interaction = Path(meta["tasks_root"]) / meta["task"] / "interaction"
-        if anchor_interaction.is_dir():
-            interaction_dir = anchor_interaction
-            print(f"[eval] using anchor-folder interaction/: {interaction_dir}")
+        # Try the run's recorded tasks_root first, then THIS checkout's local
+        # tasks dir — runs staged on another machine carry a foreign absolute
+        # tasks_root (e.g. /Users/<someone>/...) that does not exist here, so
+        # the local fallback keeps their annotations resolvable.
+        local_tasks = Path(__file__).resolve().parents[1]   # .../tasks (this checkout)
+        for cand_root in (Path(meta["tasks_root"]), local_tasks):
+            anchor_interaction = cand_root / meta["task"] / "interaction"
+            if anchor_interaction.is_dir() and any(
+                    anchor_interaction.glob("*_human_interaction_annotation.json")):
+                interaction_dir = anchor_interaction
+                print(f"[eval] using anchor-folder interaction/: {interaction_dir}")
+                break
 
     # Optional override map: { "01_Home": "/", ... }
     url_override_path = inputs / "url_map.json"
@@ -2131,7 +2168,16 @@ def main() -> int:
             install_auth_mocks(discover_ctx)
         discover_page = discover_ctx.new_page()
         discovered = discover_homepage_routes(discover_page, base_url)
+        # Capture the home page's visible word-set once, for the content-based
+        # navigate criterion (used to detect silent reverts-to-home).
+        try:
+            discover_page.goto(base_url, wait_until="domcontentloaded", timeout=10000)
+            time.sleep(0.5)
+            home_words = _visible_words(discover_page)
+        except Exception:
+            home_words = set()
         discover_ctx.close()
+        print(f"[eval] home page word-set: {len(home_words)} tokens")
         print(f"[eval] discovered {len(discovered)} routes from homepage: "
               f"{discovered[:8]}{'…' if len(discovered) > 8 else ''}")
 
@@ -2377,7 +2423,7 @@ def main() -> int:
                     })
                     continue
 
-                bscore, bnote = run_behavior_check(page, chosen, ann, base_url)
+                bscore, bnote = run_behavior_check(page, chosen, ann, base_url, home_words)
                 results.append({
                     "page": page_name, "id": ann["id"],
                     "type": ann.get("type"), "subtype": ann.get("subtype"),

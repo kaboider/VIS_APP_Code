@@ -41,6 +41,9 @@ TASK=""
 VARIANT=""
 RUN_ID=""
 MODEL=""               # CLI-specific default chosen below
+REFINE=""              # if set to a prior run dir: seed workspace with that run's
+                       # built app + feed its eval_report.md back so the agent
+                       # REFINES its previous attempt (self-improvement experiment)
 PRELOAD=false          # if true: copy <variant>/<task>/workspace/ into the run's
                        # workspace before launching agent + use _preload prompt
 SKILL=false            # if true: append a hint to the runtime prompt telling
@@ -58,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --model)   MODEL="$2";   shift 2 ;;
     --preload) PRELOAD=true; shift ;;
     --skill)   SKILL=true;   shift ;;
+    --refine)  REFINE="$2";  shift 2 ;;
     -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -112,8 +116,39 @@ case "$CLI" in
     EXTRA_PROBE_PATHS=("$HOME/.local/bin/cursor-agent" "$HOME/.cursor/bin/cursor-agent")
     INSTALL_HINT="curl https://cursor.com/install -fsS | bash   (then run 'cursor-agent login' once)"
     ;;
+  copilot)
+    # GitHub Copilot CLI (`copilot`). MAI-Code-1-Flash's model slug is
+    # 'mai-code-1-flash-picker' (the plain 'mai-code-1-flash'/'MAI-Code-1-Flash'
+    # are rejected as "not available"). Auth is the GitHub Copilot subscription
+    # (`copilot` then /login); no API key needed.
+    : "${MODEL:=mai-code-1-flash-picker}"
+    BIN_NAME="copilot"
+    BIN_VAR="COPILOT_BIN"
+    EXTRA_PROBE_PATHS=("/opt/homebrew/bin/copilot" "$HOME/.local/bin/copilot")
+    INSTALL_HINT="npm install -g @github/copilot   (then run 'copilot' once and /login to authenticate)"
+    ;;
+  kimi)
+    # Kimi Code CLI (`kimi`). Kimi K3's model alias is 'kimi-code/k3' (1M context,
+    # effort=max, thinking). Auth = oauth device-code (stored under ~/.kimi-code).
+    # The stream-json is OpenAI-chat-shaped (role/tool_calls), NOT Claude-shaped,
+    # and carries NO token counts — per-call OUTPUT tokens live only in kimi's
+    # per-session log (snapshotted post-run). No input tokens are exposed anywhere.
+    : "${MODEL:=kimi-code/k3}"
+    BIN_NAME="kimi"
+    BIN_VAR="KIMI_BIN"
+    EXTRA_PROBE_PATHS=("$HOME/.kimi-code/bin/kimi" "$HOME/.local/bin/kimi")
+    INSTALL_HINT="install kimi-code CLI, then 'kimi login' (device-code oauth)"
+    ;;
+  camel)
+    # CAMEL multi-agent Workforce (tools/camel_runner.py) — NOT a CLI binary; runs
+    # in the .camel-venv python with a coordinated team of agents. --model is an
+    # OpenAI model id (all agents share it). No PATH binary to locate.
+    : "${MODEL:=gpt-5.6-luna}"
+    BIN_NAME="camel"; BIN_VAR="CAMEL_BIN"
+    INSTALL_HINT="python3.13 -m venv tasks/.camel-venv && tasks/.camel-venv/bin/pip install camel-ai 'mcp==1.12.4'"
+    ;;
   *)
-    echo "Unknown --cli '$CLI' (expected: claude, codex, gemini, antigravity, cursor)" >&2
+    echo "Unknown --cli '$CLI' (expected: claude, codex, gemini, antigravity, cursor, copilot, kimi, camel)" >&2
     exit 1
     ;;
 esac
@@ -154,22 +189,37 @@ locate_bin() {
   return 1
 }
 
-BIN="$(locate_bin || true)"
-if [[ -z "$BIN" ]]; then
-  cat >&2 <<ERR
+if [[ "$CLI" == "camel" ]]; then
+  # No CLI binary — the agent-launch step is tools/camel_runner.py in the venv.
+  CAMEL_PY="${CAMEL_PY:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.camel-venv/bin/python}"
+  [[ -x "$CAMEL_PY" ]] || { echo "ERROR: camel venv python not found at $CAMEL_PY. $INSTALL_HINT" >&2; exit 127; }
+  BIN="$CAMEL_PY"
+else
+  BIN="$(locate_bin || true)"
+  if [[ -z "$BIN" ]]; then
+    cat >&2 <<ERR
 ERROR: '$BIN_NAME' CLI not found on this machine.
   Install: $INSTALL_HINT
   Or pass it explicitly: $BIN_VAR=/absolute/path/to/$BIN_NAME ./run_eval.sh ...
   Or run from your zsh shell directly (so PATH is inherited): ./run_eval.sh ...
 ERR
-  exit 127
+    exit 127
+  fi
 fi
 echo "Using $BIN_NAME at: $BIN" >&2
 
 # Capture the harness/CLI version so each run records exactly which binary
 # produced it (benchmark reproducibility — the harness matters as much as the
 # model). First line of `--version`, e.g. "2.1.126 (Claude Code)".
-CLI_VERSION="$("$BIN" --version 2>/dev/null | head -1 | tr -d '\r')"
+# copilot self-updates on a bare `--version`, so it would report the newest
+# version even when the run is pinned; probe it WITH --no-auto-update so the
+# recorded version matches what actually executes (the run invocation also
+# passes --no-auto-update).
+if [[ "$CLI" == "copilot" ]]; then
+  CLI_VERSION="$("$BIN" --no-auto-update --version 2>/dev/null | head -1 | tr -d '\r')"
+else
+  CLI_VERSION="$("$BIN" --version 2>/dev/null | head -1 | tr -d '\r')"
+fi
 echo "CLI version:      ${CLI_VERSION:-unknown}" >&2
 
 # ---------- paths ----------
@@ -219,7 +269,8 @@ case "$VARIANT" in
   c2)         BASE_PROMPT="$TASKS_ROOT/agent_system_promt_c2.md" ;;
   c3)         BASE_PROMPT="$TASKS_ROOT/agent_system_promt_c3${PRELOAD_SUFFIX}.md" ;;
   c4)         BASE_PROMPT="$TASKS_ROOT/agent_system_promt_c4.md" ;;
-  *)          echo "Unknown --variant: '$VARIANT' (expected c0, c1, c1/pick_*, c2, c3, c4)" >&2; exit 1 ;;
+  c5)         BASE_PROMPT="$TASKS_ROOT/agent_system_promt_c5.md" ;;
+  *)          echo "Unknown --variant: '$VARIANT' (expected c0, c1, c1/pick_*, c2, c3, c4, c5)" >&2; exit 1 ;;
 esac
 
 if [[ "$PRELOAD" == "true" && "$VARIANT" != c1* && "$VARIANT" != "c3" ]]; then
@@ -344,11 +395,43 @@ if [[ "$PRELOAD" == "true" ]]; then
   fi
 fi
 
-# Eval-side ground truth (NOT visible to the agent): cleaned anchors JSON
-# lives in the anchor folder and is staged at $RUN_DIR/anchors.json — NOT under
-# inputs/. The agent only sees inputs/; the evaluator reads anchors.json.
+# Refine mode: seed the workspace with a PRIOR run's built app, and stage that
+# run's eval_report.md as feedback the agent can read (self-improvement study).
+if [[ -n "$REFINE" ]]; then
+  [[ -d "$REFINE/workspace" ]] || { echo "[run_eval] --refine: no workspace/ in $REFINE" >&2; exit 1; }
+  # Seed source only — skip node_modules/build output (docker rebuilds deps).
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude='.DS_Store' --exclude='node_modules' --exclude='.next' \
+      --exclude='dist' --exclude='build' --exclude='.git' \
+      "$REFINE/workspace/" "$RUN_DIR/workspace/"
+  else
+    ( cd "$REFINE/workspace" && find . -type f ! -name '.DS_Store' \
+        ! -path './node_modules/*' ! -path './.next/*' ! -path './dist/*' \
+        ! -path './build/*' ! -path './.git/*' ) | while read -r rel; do
+      mkdir -p "$RUN_DIR/workspace/$(dirname "$rel")"
+      cp "$REFINE/workspace/$rel" "$RUN_DIR/workspace/$rel"
+    done
+  fi
+  n_files=$(find "$RUN_DIR/workspace" -type f 2>/dev/null | wc -l | tr -d ' ')
+  echo "[run_eval] refine: seeded workspace with prior build ($n_files files) from $(basename "$REFINE")"
+  if [[ -f "$REFINE/logs/eval_report.md" ]]; then
+    cp "$REFINE/logs/eval_report.md" "$RUN_DIR/inputs/eval_feedback.md"
+    echo "[run_eval] refine: staged eval feedback → inputs/eval_feedback.md"
+  else
+    echo "[run_eval] refine: WARNING no eval_report.md in $REFINE/logs — refining without feedback" >&2
+  fi
+fi
+
+# Eval-side ground truth: cleaned anchors JSON is staged at $RUN_DIR/anchors.json
+# for the evaluator. NOTE: this sits one level ABOVE the agent's cwd (workspace/),
+# so `../anchors.json` is reachable by an agent that goes looking — it is NOT a
+# true sandbox. Set SKIP_ANCHOR_STAGE=1 to skip staging during the build (the
+# caller must then stage anchors.json into the run dir AFTER the agent finishes,
+# before scoring). Default behavior is unchanged.
 ANCHORS_SRC="$ASSETS_DIR/${TASK}_anchors.json"
-if [[ -f "$ANCHORS_SRC" ]]; then
+if [[ "${SKIP_ANCHOR_STAGE:-0}" == 1 ]]; then
+  echo "[run_eval] SKIP_ANCHOR_STAGE=1 — anchors.json NOT staged during build (caller stages post-build)"
+elif [[ -f "$ANCHORS_SRC" ]]; then
   cp "$ANCHORS_SRC" "$RUN_DIR/anchors.json"
   echo "[run_eval] staged anchors → $RUN_DIR/anchors.json"
 fi
@@ -430,6 +513,20 @@ TASK_DESC="$RUN_DIR/inputs/description.md"
 [[ -f "$TASK_DESC" ]] || { echo "No description.md in $TASK_DESC" >&2; exit 1; }
 USER_PROMPT="$(cat "$TASK_DESC")"
 
+# Refine mode: frame the task as improving an EXISTING build. The prior attempt is
+# already in the workspace; the evaluator's report on it is at inputs/eval_feedback.md.
+if [[ -n "$REFINE" ]]; then
+  USER_PROMPT="You are REFINING an existing implementation of the app below, not starting from scratch. Your current working directory already contains your previous build of this app (all its source files). An automated evaluator scored that build against the visual spec, and its full report is at \`../inputs/eval_feedback.md\` (read it first).
+
+The report lists, per page and per annotated UI anchor: the localization score (how well the element's position matches the mockup), the behavior score (whether the interaction did the right thing), and a note explaining what happened (e.g. \"no observable effect\", \"DOM mutated but likely in-page state not navigation\", \"no candidate within tolerance\"). Anchors marked missed or scoring low on loc/beh are where you lost points.
+
+Your goal: revise the existing app so it scores HIGHER — improve the placement of mis-located elements to match the mockup, fix interactions flagged as having no effect or the wrong effect, and add any missing pages/elements the report says weren't found. Keep everything that already scored well. Re-launch the app the same way (same ports / docker compose) when done.
+
+--- ORIGINAL TASK SPEC (for reference) ---
+$USER_PROMPT"
+  echo "[run_eval] refine: prompt reframed as improve-existing-build"
+fi
+
 # ---------- launch ----------
 TOOLS_DIR="$TASKS_ROOT/tools"
 EVENTS_PATH="$RUN_DIR/logs/events.jsonl"
@@ -441,6 +538,18 @@ ANTIGRAVITY_LOG_PATH="$RUN_DIR/logs/antigravity.transcript.log"
 ANTIGRAVITY_STDERR_PATH="$RUN_DIR/logs/antigravity.stderr.log"
 
 cd "$RUN_DIR/workspace"
+
+# Optional: capture the CONTENT of every disk write during the agent run via
+# git-snapshot diffs (tools/fs_content_snap.sh). Off by default (adds a periodic
+# git add/commit); enable with CONTENT_SNAP=1. Catches writes the agent never
+# declared (npm/webpack/subprocess). Stopped just before post-run analysis.
+SNAP_PID=""
+if [[ "${CONTENT_SNAP:-0}" == "1" ]]; then
+  "$TOOLS_DIR/fs_content_snap.sh" -w "$RUN_DIR/workspace" -o "$RUN_DIR/logs/content_snap" \
+      -i "${CONTENT_SNAP_INTERVAL:-5}" >>"$RUN_DIR/logs/content_snap.log" 2>&1 &
+  SNAP_PID=$!
+  echo "[run_eval] CONTENT_SNAP on — disk-write content → logs/content_snap/disk_writes.jsonl (pid $SNAP_PID)"
+fi
 
 echo "================================================================"
 echo "Run ID:           $RUN_ID"
@@ -471,8 +580,19 @@ case "$CLI" in
     #   --add-dir gives the agent read access to inputs/ outside its cwd.
     #   --dangerously-skip-permissions runs all tools without per-call confirmation.
     #   --append-system-prompt layers our agent_system_prompt on top of claude's defaults.
-    #   --output-format stream-json --verbose captures the full event stream.
+    #   --output-format stream-json --verbose captures the full event stream
+    #     (this is the FULLEST content surface — thinking blocks come through
+    #     here with full text, alongside text/tool_use/tool_result/server_tool_use).
     #   tee_jsonl.py adds wall-clock timestamps and prints concise progress to stderr.
+    # Optional API-diagnostic layer: set CLAUDE_DEBUG=1 to also write claude's
+    # `--debug api` log (raw API-call timing, endpoints, retries, and rate-limit/
+    # cap errors — e.g. z.ai's 429/1308) to logs/claude_debug.log. This does NOT
+    # add message/thinking bodies (those are already in the stream), but is the
+    # best surface for diagnosing z.ai cap/socket issues on GLM runs.
+    CLAUDE_DEBUG_ARGS=()
+    if [[ "${CLAUDE_DEBUG:-0}" == "1" ]]; then
+      CLAUDE_DEBUG_ARGS=(--debug "${CLAUDE_DEBUG_FILTER:-api}" --debug-file "$RUN_DIR/logs/claude_debug.log")
+    fi
     "$BIN" \
       --model "$MODEL" \
       --append-system-prompt "$(cat "$RUNTIME_PROMPT")" \
@@ -481,9 +601,39 @@ case "$CLI" in
       --disallowed-tools ScheduleWakeup \
       --output-format stream-json \
       --verbose \
+      ${CLAUDE_DEBUG_ARGS[@]+"${CLAUDE_DEBUG_ARGS[@]}"} \
       -p "$USER_PROMPT" \
       | python3 -u "$TOOLS_DIR/tee_jsonl.py" "$EVENTS_PATH"
     EXIT=${PIPESTATUS[0]}
+    ;;
+  camel)
+    # CAMEL build. Default = multi-agent Workforce (camel_runner.py: Coordinator +
+    # Task planner + N workers, hand-rolled FunctionTools). CAMEL_SINGLE=1 switches to
+    # the SINGLE-agent arm (camel_runner_single.py: one ChatAgent with CAMEL's OFFICIAL
+    # toolkits — TerminalToolkit/FileToolkit/NoteTakingToolkit, eigent.py style). Both
+    # use OpenAI api_mode=responses and write logs/summary.json themselves (is_error +
+    # has_compose), so the claude analyzers below are skipped. cwd is already workspace/.
+    CAMEL_KEY_FILE="${CAMEL_KEY_FILE:-$TASKS_ROOT/../api_keys/chatgpt.txt}"
+    if [[ "${CAMEL_SINGLE:-0}" == "1" ]]; then
+      echo "[run_eval] camel: SINGLE-agent mode (official toolkits)"
+      "$BIN" "$TOOLS_DIR/camel_runner_single.py" \
+        --run-dir "$RUN_DIR" \
+        --api-key-file "$CAMEL_KEY_FILE" \
+        --model "$MODEL" \
+        --max-steps "${CAMEL_MAX_STEPS:-12}" \
+        --system-prompt "$RUNTIME_PROMPT" \
+        --timeout "${CAMEL_TIMEOUT:-3600}"
+      EXIT=$?
+    else
+      "$BIN" "$TOOLS_DIR/camel_runner.py" \
+        --run-dir "$RUN_DIR" \
+        --api-key-file "$CAMEL_KEY_FILE" \
+        --model "$MODEL" \
+        --workers "${CAMEL_WORKERS:-3}" \
+        --system-prompt "$RUNTIME_PROMPT" \
+        --timeout "${CAMEL_TIMEOUT:-3600}"
+      EXIT=$?
+    fi
     ;;
   codex)
     # Codex CLI flags (current version):
@@ -643,8 +793,150 @@ $USER_PROMPT"
     wait "$PIPELINE_PID"; EXIT=$?
     kill "$WATCHDOG_PID" 2>/dev/null || true
     ;;
+  copilot)
+    # GitHub Copilot CLI (`copilot`) headless, with MAXIMAL telemetry capture:
+    #   -p                   : non-interactive prompt (exits after completion)
+    #   --model              : slug (mai-code-1-flash-picker = MAI-Code-1-Flash)
+    #   --allow-all          : all tools + paths + urls, no confirmation prompts
+    #                          (required for autonomous non-interactive building)
+    #   --add-dir            : grant read access to the read-only task inputs
+    #   --output-format json : copilot's own JSONL event envelope (assistant.*,
+    #                          tool.execution_*, terminal `result`). Carries only
+    #                          per-message OUTPUT tokens (outputTokens), no input.
+    #   --log-dir/--log-level all : full debug process log (MCP init, settings,
+    #                          completion-request config, errors) → logs/copilot_debug/.
+    # We ALSO enable the OpenTelemetry file exporter (COPILOT_OTEL_*), which is
+    # the only surface that emits REAL input+output tokens per API call, plus AIU
+    # cost, TTFT, per-turn timing, and MCP/skill context (GenAI semantic conv.).
+    # After the run we snapshot the per-session state dir + sqlite `turns`
+    # (full user/assistant transcript) — see the copilot post-processing block.
+    # No --append-system-prompt equivalent, so prepend the system prompt to the
+    # user prompt (like codex/gemini/cursor). stdin from /dev/null so it never
+    # blocks on a prompt; wall-clock timeout as a safety net.
+    COMBINED_PROMPT="$(cat "$RUNTIME_PROMPT")
+
+---
+
+$USER_PROMPT"
+    COPILOT_TIMEOUT="${COPILOT_TIMEOUT:-45m}"
+    TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+    mkdir -p "$RUN_DIR/logs/copilot_debug"
+    ( cd "$RUN_DIR/workspace" && \
+        COPILOT_OTEL_ENABLED=true \
+        COPILOT_OTEL_EXPORTER_TYPE=file \
+        COPILOT_OTEL_FILE_EXPORTER_PATH="$RUN_DIR/logs/copilot_otel.jsonl" \
+        ${TIMEOUT_BIN:+"$TIMEOUT_BIN" -k 30s "$COPILOT_TIMEOUT"} "$BIN" \
+        -p "$COMBINED_PROMPT" \
+        --model "$MODEL" \
+        --allow-all \
+        --add-dir "$RUN_DIR/inputs" \
+        --output-format json \
+        --log-dir "$RUN_DIR/logs/copilot_debug" \
+        --log-level all \
+        --no-auto-update \
+        --no-color \
+        < /dev/null \
+        > "$RUN_DIR/logs/copilot_events.jsonl" \
+        2> "$RUN_DIR/logs/copilot.stderr.log" )
+    EXIT=$?
+    # Snapshot the per-session state dir (compacted events.jsonl, checkpoints,
+    # workspace.yaml, files/, research/) + the session's rows from the global
+    # sqlite store (turns = full user/assistant transcript, session_files,
+    # checkpoints). Keyed by the sessionId on the terminal `result` event.
+    COPILOT_HOME="${COPILOT_HOME:-$HOME/.copilot}"
+    SID="$(python3 -c "import json,sys
+sid=None
+for l in open('$RUN_DIR/logs/copilot_events.jsonl'):
+    try: e=json.loads(l)
+    except: continue
+    if e.get('type')=='result' and e.get('sessionId'): sid=e['sessionId']
+print(sid or '')" 2>/dev/null)"
+    if [[ -n "$SID" ]]; then
+      if [[ -d "$COPILOT_HOME/session-state/$SID" ]]; then
+        mkdir -p "$RUN_DIR/logs/copilot_session_state"
+        cp -R "$COPILOT_HOME/session-state/$SID/." "$RUN_DIR/logs/copilot_session_state/" 2>/dev/null || true
+      fi
+      if [[ -f "$COPILOT_HOME/session-store.db" ]] && command -v sqlite3 >/dev/null 2>&1; then
+        for TBL in sessions turns checkpoints session_files session_refs forge_trajectory_events; do
+          sqlite3 -json "$COPILOT_HOME/session-store.db" \
+            "SELECT * FROM $TBL WHERE session_id='$SID';" \
+            > "$RUN_DIR/logs/copilot_store_${TBL}.json" 2>/dev/null || true
+        done
+        # `sessions` keys on id, not session_id — fix that one.
+        sqlite3 -json "$COPILOT_HOME/session-store.db" \
+          "SELECT * FROM sessions WHERE id='$SID';" \
+          > "$RUN_DIR/logs/copilot_store_sessions.json" 2>/dev/null || true
+      fi
+      echo "[run_eval] copilot: snapshotted session $SID (state dir + sqlite turns)" >&2
+    else
+      echo "[run_eval] copilot: no sessionId on result event; skipped state snapshot" >&2
+    fi
+    ;;
+  kimi)
+    # Kimi Code CLI headless: `-p` runs one prompt non-interactively and AUTO-
+    # EXECUTES tools (the interactive --yolo/--auto flags ERROR when combined with
+    # -p). No --append-system-prompt, so the system prompt is prepended (like
+    # codex/copilot/cursor). --output-format stream-json emits OpenAI-shaped events
+    # (role/content/tool_calls) with NO token counts. Real per-call OUTPUT tokens +
+    # timing are only in kimi's per-session log, which we snapshot afterwards.
+    # KIMI_LOG_LEVEL=debug = fullest logs; KIMI_CODE_NO_AUTO_UPDATE pins the version.
+    # kimi-specific: K3 over-thinks and often finishes WITHOUT a docker-compose.yml
+    # (its dominant failure mode — ~8/10 builds shipped none). Prepend a hard
+    # deliverable-enforcement block that forces a bootable docker-compose skeleton
+    # first. Set KIMI_BOOST=0 for an unboosted, apples-to-apples run.
+    KIMI_BOOST_FILE="$TASKS_ROOT/kimi_deliverable_boost.md"
+    KIMI_BOOST_TEXT=""
+    if [[ "${KIMI_BOOST:-1}" == "1" && -f "$KIMI_BOOST_FILE" ]]; then
+      KIMI_BOOST_TEXT="$(cat "$KIMI_BOOST_FILE")
+
+"
+      echo "[run_eval] kimi: deliverable-boost prompt ON (KIMI_BOOST=0 to disable)"
+    fi
+    COMBINED_PROMPT="${KIMI_BOOST_TEXT}$(cat "$RUNTIME_PROMPT")
+
+---
+
+$USER_PROMPT"
+    KIMI_TIMEOUT="${KIMI_TIMEOUT:-45m}"
+    TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+    KIMI_HOME_DIR="${KIMI_HOME_DIR:-$HOME/.kimi-code}"
+    ( cd "$RUN_DIR/workspace" && \
+        KIMI_LOG_LEVEL="${KIMI_LOG_LEVEL:-debug}" \
+        KIMI_CODE_NO_AUTO_UPDATE=1 \
+        ${TIMEOUT_BIN:+"$TIMEOUT_BIN" -k 30s "$KIMI_TIMEOUT"} "$BIN" \
+        -p "$COMBINED_PROMPT" \
+        --model "$MODEL" \
+        --add-dir "$RUN_DIR/inputs" \
+        --output-format stream-json \
+        < /dev/null \
+        > "$RUN_DIR/logs/kimi_events.jsonl" \
+        2> "$RUN_DIR/logs/kimi.stderr.log" )
+    EXIT=$?
+    # Snapshot kimi's per-session dir: kimi-code.log (per-call `llm response …
+    # outputTokens=N` + timing), wire.jsonl (session event log), state.json.
+    # The `-p` stream does NOT reliably emit a session_id, so locate the session
+    # by matching this run's absolute workspace path inside each session's
+    # state.json (its `workDir` field) — robust, no dependence on a terminal event.
+    KSESS="$(grep -rl "$RUN_DIR/workspace" "$KIMI_HOME_DIR"/sessions/*/session_*/state.json 2>/dev/null \
+              | head -1 | xargs -r dirname)"
+    if [[ -n "$KSESS" && -d "$KSESS" ]]; then
+      mkdir -p "$RUN_DIR/logs/kimi_session"
+      cp -R "$KSESS/." "$RUN_DIR/logs/kimi_session/" 2>/dev/null || true
+      echo "[run_eval] kimi: snapshotted session $(basename "$KSESS")" >&2
+    else
+      echo "[run_eval] kimi: no session dir matched workDir=$RUN_DIR/workspace" >&2
+    fi
+    ;;
 esac
 set -e
+
+# Stop the live disk-write content snapshotter (if CONTENT_SNAP=1); its EXIT trap
+# builds logs/content_snap/disk_writes.jsonl from the git snapshots.
+if [[ -n "$SNAP_PID" ]]; then
+  kill "$SNAP_PID" 2>/dev/null || true
+  wait "$SNAP_PID" 2>/dev/null || true
+  echo "[run_eval] CONTENT_SNAP stopped; disk-write content in logs/content_snap/disk_writes.jsonl"
+fi
 
 # Post-run analysis: structured event streams are post-processed into
 # summaries and edit profiles where supported.
@@ -655,6 +947,12 @@ if [[ "$CLI" == "claude" || "$CLI" == "cursor" ]]; then
     || echo "(analyze_run.py failed; events.jsonl is intact)"
   python3 "$TOOLS_DIR/analyze_edits.py" "$RUN_DIR" \
     || echo "(analyze_edits.py failed; events.jsonl is intact)"
+  # Content-level read/write log (agent-side): full Write/Edit/Read/Bash CONTENT,
+  # not just the byte/line metadata in edits.jsonl. Offline, zero-cost — parses
+  # the events.jsonl that already exists. The only source that carries READ content.
+  python3 "$TOOLS_DIR/agent_content_log.py" "$EVENTS_PATH" -w "$RUN_DIR/workspace" \
+    -o "$RUN_DIR/logs/content_log.jsonl" \
+    || echo "(agent_content_log.py failed; events.jsonl is intact)"
   # cursor-specific finalize: (1) map the result-event usage (camelCase, only on
   # the terminal `result` event) into summary.json's tokens block — analyze_run.py
   # leaves them zero because cursor doesn't put usage on per-assistant messages;
@@ -686,6 +984,24 @@ elif [[ "$CLI" == "antigravity" ]]; then
   # so there's nothing for analyze_run/analyze_edits to parse. The raw
   # transcript + stderr logs and the built workspace are the artifacts.
   :
+elif [[ "$CLI" == "copilot" ]]; then
+  # Copilot emits its own JSONL envelope (assistant.message_delta/reasoning,
+  # tool.execution_*, a terminal `result` with usage). analyze_copilot_run.py
+  # parses it into summary.json + turns.csv + summary.md, and — when the OTel
+  # file exporter dump (copilot_otel.jsonl) is present — folds in the REAL
+  # input+output tokens, AIU cost, and per-turn timing from the GenAI spans.
+  # The JSONL stream alone carries only per-message OUTPUT tokens (no input);
+  # OTel is what makes a true input+output metric possible.
+  python3 "$TOOLS_DIR/analyze_copilot_run.py" "$RUN_DIR" \
+    || echo "(analyze_copilot_run.py failed; copilot_events.jsonl is intact)"
+elif [[ "$CLI" == "kimi" ]]; then
+  # Kimi emits OpenAI-shaped stream-json (role/content/tool_calls) with NO tokens.
+  # analyze_kimi_run.py parses that (tool calls, assistant text, is_error) AND the
+  # snapshotted per-session log (kimi_session/logs/kimi-code.log) to sum per-call
+  # `outputTokens` + timing into summary.json. Tokens are OUTPUT-ONLY (kimi exposes
+  # no input tokens on any surface); keep-logic uses docker-compose.yml presence.
+  python3 "$TOOLS_DIR/analyze_kimi_run.py" "$RUN_DIR" \
+    || echo "(analyze_kimi_run.py failed; kimi_events.jsonl is intact)"
 fi
 
 echo
@@ -727,6 +1043,22 @@ case "$CLI" in
     echo "  turn-by-turn:   $RUN_DIR/logs/turns.csv"
     echo "  transcript:     $RUN_DIR/logs/transcript.md"
     echo "  edit profile:   $RUN_DIR/logs/edits.md  (+ edits.jsonl)"
+    ;;
+  copilot)
+    echo "  events (raw):   $RUN_DIR/logs/copilot_events.jsonl"
+    echo "  otel (tokens):  $RUN_DIR/logs/copilot_otel.jsonl  (real input+output tokens, AIU cost)"
+    echo "  debug log:      $RUN_DIR/logs/copilot_debug/"
+    echo "  session state:  $RUN_DIR/logs/copilot_session_state/  (events.jsonl, checkpoints, files, research)"
+    echo "  sqlite dumps:   $RUN_DIR/logs/copilot_store_*.json  (turns transcript, session_files, …)"
+    echo "  stderr:         $RUN_DIR/logs/copilot.stderr.log"
+    echo "  summary:        $RUN_DIR/logs/summary.md  (+ summary.json)"
+    echo "  per-turn:       $RUN_DIR/logs/turns.csv"
+    ;;
+  kimi)
+    echo "  events (raw):   $RUN_DIR/logs/kimi_events.jsonl  (OpenAI-shaped stream, no tokens)"
+    echo "  session snap:   $RUN_DIR/logs/kimi_session/  (kimi-code.log = per-call outputTokens+timing, wire.jsonl, state.json)"
+    echo "  stderr:         $RUN_DIR/logs/kimi.stderr.log"
+    echo "  summary:        $RUN_DIR/logs/summary.md  (+ summary.json — OUTPUT-only tokens)"
     ;;
 esac
 echo "  meta:           $RUN_DIR/meta.json"
