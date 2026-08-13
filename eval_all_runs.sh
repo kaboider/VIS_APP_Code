@@ -37,6 +37,17 @@ FILTER="${FILTER:-*}"
 DOCKER_WAIT_TIMEOUT="${DOCKER_WAIT_TIMEOUT:-300}"   # seconds — for `compose up --wait` build phase
 HTTP_WAIT_TIMEOUT="${HTTP_WAIT_TIMEOUT:-90}"        # seconds — extra HTTP poll on frontend port
 SUMMARY_CSV="$RUNS_ROOT/eval_summary.csv"
+TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+
+run_with_timeout() {
+  local duration="$1"
+  shift
+  if [[ -n "$TIMEOUT_BIN" ]]; then
+    "$TIMEOUT_BIN" "$duration" "$@"
+  else
+    "$@"
+  fi
+}
 
 [[ -d "$RUNS_ROOT" ]] || { echo "ERROR: RUNS_ROOT not found: $RUNS_ROOT" >&2; exit 1; }
 [[ -f "$EVAL_PY"  ]] || { echo "ERROR: eval_run.py not found: $EVAL_PY"  >&2; exit 1; }
@@ -108,7 +119,7 @@ bring_up_docker() {
   # is up and accepting requests.
   local ws="$1" project="$2"
   echo "  [docker] up -d --wait  (project=$project)"
-  ( cd "$ws" && timeout "$DOCKER_WAIT_TIMEOUT" docker compose -p "$project" up -d --build --wait ) \
+  ( cd "$ws" && run_with_timeout "$DOCKER_WAIT_TIMEOUT" docker compose -p "$project" up -d --build --wait ) \
     >/dev/null 2>&1
   local rc=$?
   if [[ $rc -ne 0 ]]; then
@@ -205,6 +216,11 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
             [[ -z "$p" ]] && continue
             docker compose -p "$p" down --remove-orphans >/dev/null 2>&1 || true
           done < <(docker compose ls -q 2>/dev/null)
+          # Colima's host-side port forward can outlive `compose down` very
+          # briefly.  Give it time to withdraw the listener before inspecting
+          # the port; killing that listener would kill Colima's host agent and
+          # take the Docker daemon socket down with it.
+          sleep 2
         fi
         # Free our ports from any stray non-docker listener (e.g. VS Code's
         # port-forward proxy that grabbed the port during the agent run) — a
@@ -215,8 +231,21 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
             [[ -n "$_p" ]] || continue
             _h="$(lsof -nP -iTCP:"$_p" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ')"
             if [[ -n "${_h// /}" ]]; then
-              echo "  [docker] freeing port $_p from stray PID(s) ${_h}"
-              kill $_h 2>/dev/null || true; sleep 1
+              _safe_h=""
+              for _pid in $_h; do
+                _cmd="$(ps -p "$_pid" -o command= 2>/dev/null || true)"
+                case "$_cmd" in
+                  *colima*|*lima*|*hostagent*|*ssh*)
+                    echo "  [docker] port $_p is still held by Colima forwarding PID $_pid; waiting"
+                    ;;
+                  *) _safe_h="${_safe_h} ${_pid}" ;;
+                esac
+              done
+              if [[ -n "${_safe_h// /}" ]]; then
+                echo "  [docker] freeing port $_p from stray PID(s)${_safe_h}"
+                kill $_safe_h 2>/dev/null || true
+              fi
+              sleep 2
             fi
           done
         fi
@@ -260,7 +289,7 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
       # navigation loop) otherwise wedges the whole batch forever. On timeout,
       # mark FAILED and move on; re-score that task later if needed.
       EVAL_TIMEOUT="${EVAL_TIMEOUT:-900}"
-      if timeout "$EVAL_TIMEOUT" python3 "$EVAL_PY" "$RUN_DIR" >"$LOG" 2>&1; then
+      if run_with_timeout "$EVAL_TIMEOUT" python3 "$EVAL_PY" "$RUN_DIR" >"$LOG" 2>&1; then
         echo "  [eval] OK  (log: $LOG)"
       else
         rc=$?

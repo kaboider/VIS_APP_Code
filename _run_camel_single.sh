@@ -8,6 +8,23 @@
 # Skip-guard keeps clean builds; retry 3x; then score with eval_all_runs.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
+
+# CAMEL API configuration loaded from the project-root .env file. To use a
+# different file, set CAMEL_ENV_FILE=/path/to/file.
+ENV_FILE="${CAMEL_ENV_FILE:-$PWD/.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+export OPENAI_API_KEY="${CAMEL_API_KEY:-${OPENAI_API_KEY:-}}"
+export OPENAI_API_BASE_URL="${CAMEL_API_URL:-${OPENAI_API_BASE_URL:-}}"
+if [ -z "$OPENAI_API_KEY" ]; then
+  echo "ERROR: set CAMEL_API_KEY in $ENV_FILE (or export OPENAI_API_KEY)." >&2
+  exit 2
+fi
+
 MODEL="${MODEL:-gpt-5.6-luna}"
 export RUNS_ROOT="${RUNS_ROOT:-$PWD/_runs_camel_${MODEL//\//-}_single}"
 mkdir -p "$RUNS_ROOT"

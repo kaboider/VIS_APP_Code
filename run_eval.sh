@@ -313,7 +313,7 @@ COMPOSE_PROJECT="$(printf '%s' "eval_${SAFE_VARIANT}_${TASK}${CLI_TAG}" \
 # starting this run, regardless of which ports they hold.
 port_in_use() { (echo > "/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
-if command -v docker >/dev/null 2>&1; then
+if command -v docker >/dev/null 2>&1 && [[ "${PRESERVE_OTHER_DOCKER:-0}" != "1" ]]; then
   # 1) Bring down every running compose project (graceful: removes networks + orphans).
   while IFS= read -r p; do
     [[ -z "$p" ]] && continue
@@ -332,6 +332,10 @@ if command -v docker >/dev/null 2>&1; then
   sleep 1   # let the OS release sockets
 fi
 
+if [[ "${PRESERVE_OTHER_DOCKER:-0}" == "1" ]]; then
+  echo "[run_eval] PRESERVE_OTHER_DOCKER=1 — skipping global Docker teardown for parallel build"
+fi
+
 # Final sanity: our fixed ports must be free now. Docker is already torn down
 # above, so any remaining listener is a stray non-docker process — almost always
 # an editor's port-forward proxy (e.g. VS Code grabs a port an app exposed and
@@ -341,10 +345,25 @@ for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
   if port_in_use "$port" && command -v lsof >/dev/null 2>&1; then
     holders="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ')"
     if [[ -n "${holders// /}" ]]; then
-      echo "[run_eval] port $port held by PID(s) ${holders}after teardown — killing stray listener" >&2
-      kill $holders 2>/dev/null || true
+      safe_holders=""
+      for holder in $holders; do
+        holder_cmd="$(ps -p "$holder" -o command= 2>/dev/null || true)"
+        case "$holder_cmd" in
+          *colima*|*lima*|*hostagent*|*ssh*)
+            echo "[run_eval] port $port held by Colima forwarding PID $holder — not killing it" >&2
+            ;;
+          *) safe_holders="${safe_holders} ${holder}" ;;
+        esac
+      done
+      if [[ -n "${safe_holders// /}" ]]; then
+        echo "[run_eval] port $port held by PID(s)${safe_holders} after teardown — killing stray listener" >&2
+        kill $safe_holders 2>/dev/null || true
+      fi
       sleep 1
-      if port_in_use "$port"; then kill -9 $holders 2>/dev/null || true; sleep 1; fi
+      if port_in_use "$port" && [[ -n "${safe_holders// /}" ]]; then
+        kill -9 $safe_holders 2>/dev/null || true
+        sleep 1
+      fi
     fi
   fi
   if port_in_use "$port"; then
@@ -620,6 +639,8 @@ case "$CLI" in
         --run-dir "$RUN_DIR" \
         --api-key-file "$CAMEL_KEY_FILE" \
         --model "$MODEL" \
+        --reasoning-effort "${CAMEL_REASONING_EFFORT:-medium}" \
+        --prompt-cache-retention "${CAMEL_PROMPT_CACHE_RETENTION:-24h}" \
         --max-steps "${CAMEL_MAX_STEPS:-12}" \
         --system-prompt "$RUNTIME_PROMPT" \
         --timeout "${CAMEL_TIMEOUT:-3600}"
@@ -629,6 +650,8 @@ case "$CLI" in
         --run-dir "$RUN_DIR" \
         --api-key-file "$CAMEL_KEY_FILE" \
         --model "$MODEL" \
+        --reasoning-effort "${CAMEL_REASONING_EFFORT:-medium}" \
+        --prompt-cache-retention "${CAMEL_PROMPT_CACHE_RETENTION:-24h}" \
         --workers "${CAMEL_WORKERS:-3}" \
         --system-prompt "$RUNTIME_PROMPT" \
         --timeout "${CAMEL_TIMEOUT:-3600}"

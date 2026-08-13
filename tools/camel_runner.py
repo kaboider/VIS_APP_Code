@@ -22,16 +22,22 @@ Usage:
                   [--model gpt-5.6-luna] [--workers 3] [--system-prompt <md>] \
                   [--timeout 3600]
 """
-import os, sys, json, argparse, time, traceback, threading
+import os, sys, json, argparse, time, traceback, threading, hashlib
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", required=True)
-    ap.add_argument("--api-key-file", required=True)
+    ap.add_argument("--api-key-file", default="")
     ap.add_argument("--model", default="gpt-5.6-luna")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--system-prompt", default="")
-    ap.add_argument("--base-url", default="")          # for OpenAI-compatible endpoints
+    ap.add_argument("--base-url", default=os.environ.get("OPENAI_API_BASE_URL", ""))
+    ap.add_argument("--reasoning-effort", default=os.environ.get("CAMEL_REASONING_EFFORT", "medium"),
+                    choices=("none", "minimal", "low", "medium", "high", "xhigh"))
+    ap.add_argument("--prompt-cache-key", default=os.environ.get("CAMEL_PROMPT_CACHE_KEY", ""))
+    ap.add_argument("--prompt-cache-retention",
+                    default=os.environ.get("CAMEL_PROMPT_CACHE_RETENTION", "24h"),
+                    choices=("in_memory", "24h"))
     ap.add_argument("--timeout", type=int, default=3600)
     a = ap.parse_args()
 
@@ -40,9 +46,26 @@ def main():
     inp = os.path.join(run_dir, "inputs")
     logs = os.path.join(run_dir, "logs"); os.makedirs(logs, exist_ok=True)
     os.makedirs(ws, exist_ok=True)
-    os.environ["OPENAI_API_KEY"] = open(a.api_key_file).read().strip()
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key and a.api_key_file and os.path.isfile(a.api_key_file):
+        api_key = open(a.api_key_file).read().strip()
+    if not api_key:
+        ap.error("set OPENAI_API_KEY/CAMEL_API_KEY or provide --api-key-file")
+    os.environ["OPENAI_API_KEY"] = api_key
     if a.base_url:
         os.environ["OPENAI_API_BASE_URL"] = a.base_url
+
+    meta = {}
+    try:
+        meta = json.load(open(os.path.join(run_dir, "meta.json")))
+    except (OSError, json.JSONDecodeError):
+        pass
+    cache_identity = "|".join(("camel-workforce", a.model, a.reasoning_effort,
+                               str(meta.get("task", "unknown")),
+                               str(meta.get("variant", "unknown"))))
+    cache_key = a.prompt_cache_key or (
+        "camel-workforce-" + hashlib.sha256(cache_identity.encode()).hexdigest()[:32]
+    )
 
     import subprocess
     from camel.agents import ChatAgent
@@ -58,9 +81,16 @@ def main():
             kw["url"] = a.base_url
         # gpt-5.x reasoning models reject function tools on /v1/chat/completions; route
         # through the OpenAI Responses API (camel 0.2.90 api_mode) so tools work WITH
-        # full reasoning. Harmless for non-reasoning models.
+        # full reasoning. store=False avoids previous_response_id, which Zero Data
+        # Retention gateways reject, while CAMEL resends the conversation state.
         return ModelFactory.create(model_platform=ModelPlatformType.OPENAI,
-                                   model_type=a.model, api_mode="responses", **kw)
+                                   model_type=a.model, api_mode="responses",
+                                   model_config_dict={
+                                       "store": False,
+                                       "reasoning": {"effort": a.reasoning_effort},
+                                       "prompt_cache_key": cache_key,
+                                       "prompt_cache_retention": a.prompt_cache_retention,
+                                   }, **kw)
 
     # Custom, workspace-rooted coding tools (predictable + no sandbox-venv pollution,
     # unlike TerminalToolkit which drops a .initial_env virtualenv into the workspace).
