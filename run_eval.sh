@@ -35,6 +35,9 @@
 
 set -euo pipefail
 
+# Preserve the exact caller arguments for the optional isolation bootstrap below.
+ORIGINAL_ARGS=("$@")
+
 # ---------- args ----------
 CLI="claude"           # claude | codex | gemini
 TASK=""
@@ -152,6 +155,128 @@ case "$CLI" in
     exit 1
     ;;
 esac
+
+# ---------- clean-room bootstrap ----------
+# Agent CLIs commonly have broad shell/filesystem access. Running their workspace
+# under this repository lets them discover prior runs, evaluator code, anchors,
+# and other non-public benchmark files by walking parent directories. By default,
+# re-exec the harness from one temporary root while materializing the agent's
+# run under a second, separate root. The agent-side tree contains only its
+# workspace plus the selected variant/task's public inputs; harness code is not
+# placed anywhere above its cwd.
+# The generated run is moved back to the requested RUNS_ROOT only after the agent
+# exits. Ground-truth anchors are staged after that move, never during generation.
+if [[ "${VISTA_ISOLATED_CHILD:-0}" != "1" && "${VISTA_EVAL_ISOLATION:-1}" == "1" ]]; then
+  SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PUBLIC_RUNS_ROOT="${RUNS_ROOT:-$SOURCE_ROOT/_runs}"
+  [[ "$PUBLIC_RUNS_ROOT" = /* ]] || PUBLIC_RUNS_ROOT="$SOURCE_ROOT/$PUBLIC_RUNS_ROOT"
+
+  ISO_TS="$(date +%Y%m%d_%H%M%S)"
+  ISO_SAFE_VARIANT="${VARIANT//\//_}"
+  if [[ -z "$RUN_ID" ]]; then
+    if [[ "$CLI" == "claude" ]]; then
+      RUN_ID="${ISO_TS}_${TASK}_${ISO_SAFE_VARIANT}"
+    else
+      RUN_ID="${ISO_TS}_${TASK}_${ISO_SAFE_VARIANT}_${CLI}"
+    fi
+  fi
+  PUBLIC_RUN_DIR="$PUBLIC_RUNS_ROOT/$RUN_ID"
+  [[ ! -e "$PUBLIC_RUN_DIR" ]] || {
+    echo "ERROR: run already exists: $PUBLIC_RUN_DIR" >&2
+    exit 1
+  }
+
+  ISO_HARNESS_ROOT="$(mktemp -d /tmp/vista_eval_harness.XXXXXX)"
+  ISO_AGENT_ROOT="$(mktemp -d /tmp/vista_eval_agent.XXXXXX)"
+  mkdir -p "$ISO_HARNESS_ROOT/$VARIANT"
+  cp "$SOURCE_ROOT/run_eval.sh" "$ISO_HARNESS_ROOT/run_eval.sh"
+  cp "$SOURCE_ROOT"/agent_system_promt_*.md "$ISO_HARNESS_ROOT/"
+  rsync -a --exclude='__pycache__' "$SOURCE_ROOT/tools" "$ISO_HARNESS_ROOT/"
+  rsync -a "$SOURCE_ROOT/$VARIANT/$TASK" "$ISO_HARNESS_ROOT/$VARIANT/"
+
+  # Native macOS deny-list around the entire child process tree. This is the
+  # enforcement boundary: every agent shell/tool inherits it, so an absolute
+  # path or `cd` cannot recover private benchmark files from SOURCE_ROOT.
+  SANDBOX_PROFILE="$ISO_HARNESS_ROOT/benchmark.sb"
+  cat > "$SANDBOX_PROFILE" <<EOF
+(version 1)
+(allow default)
+(deny file-read* (subpath "$SOURCE_ROOT"))
+(deny file-write* (subpath "$SOURCE_ROOT"))
+; CAMEL imports its installed packages from this venv, but cannot write there.
+(allow file-read* (subpath "$SOURCE_ROOT/.camel-venv"))
+EOF
+  CHILD_COMMAND=(bash "$ISO_HARNESS_ROOT/run_eval.sh" "${ORIGINAL_ARGS[@]}" --run-id "$RUN_ID")
+  if command -v sandbox-exec >/dev/null 2>&1; then
+    if sandbox-exec -f "$SANDBOX_PROFILE" head -c 1 "$SOURCE_ROOT/run_eval.sh" >/dev/null 2>&1; then
+      echo "ERROR: benchmark sandbox self-test failed; private source root remained readable" >&2
+      exit 1
+    fi
+    CHILD_COMMAND=(sandbox-exec -f "$SANDBOX_PROFILE" "${CHILD_COMMAND[@]}")
+    OS_SANDBOX_ENFORCED=1
+  else
+    [[ "${ALLOW_UNSANDBOXED_EVAL:-0}" == "1" ]] || {
+      echo "ERROR: sandbox-exec unavailable; set ALLOW_UNSANDBOXED_EVAL=1 to explicitly accept directory-only isolation" >&2
+      exit 1
+    }
+    OS_SANDBOX_ENFORCED=0
+  fi
+
+  echo "[run_eval] isolated agent root: $ISO_AGENT_ROOT" >&2
+  echo "[run_eval] public result target: $PUBLIC_RUN_DIR" >&2
+  set +e
+  ( cd "$ISO_HARNESS_ROOT" && \
+    VISTA_ISOLATED_CHILD=1 \
+    RUNS_ROOT="$ISO_AGENT_ROOT/_runs" \
+    SKIP_ANCHOR_STAGE=1 \
+    CAMEL_PY="${CAMEL_PY:-$SOURCE_ROOT/.camel-venv/bin/python}" \
+    CAMEL_KEY_FILE="${CAMEL_KEY_FILE:-$SOURCE_ROOT/../api_keys/chatgpt.txt}" \
+      "${CHILD_COMMAND[@]}" )
+  CHILD_EXIT=$?
+  set -e
+
+  CHILD_RUN_DIR="$ISO_AGENT_ROOT/_runs/$RUN_ID"
+  if [[ -d "$CHILD_RUN_DIR" ]]; then
+    mkdir -p "$PUBLIC_RUNS_ROOT"
+    mv "$CHILD_RUN_DIR" "$PUBLIC_RUN_DIR"
+    ANCHORS_SRC="$SOURCE_ROOT/$TASK/${TASK}_anchors.json"
+    if [[ "${POST_STAGE_ANCHORS:-1}" == "1" && -f "$ANCHORS_SRC" ]]; then
+      cp "$ANCHORS_SRC" "$PUBLIC_RUN_DIR/anchors.json"
+      echo "[run_eval] post-staged anchors after agent exit → $PUBLIC_RUN_DIR/anchors.json" >&2
+    fi
+    python3 - "$PUBLIC_RUN_DIR/meta.json" "$SOURCE_ROOT" "$PUBLIC_RUN_DIR" "$ISO_AGENT_ROOT" "$OS_SANDBOX_ENFORCED" <<'PY'
+import json, os, sys
+p, source_root, public_run, isolated_root, sandbox_enforced = sys.argv[1:]
+if os.path.isfile(p):
+    data = json.load(open(p))
+    data.update({
+        "tasks_root": source_root,
+        "run_dir": public_run,
+        "agent_isolated": True,
+        "isolated_root_during_agent_run": isolated_root,
+        "os_sandbox_enforced": sandbox_enforced == "1",
+        "anchors_staged_after_agent_exit": os.path.isfile(os.path.join(public_run, "anchors.json")),
+    })
+    with open(p, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+PY
+    echo "[run_eval] isolated artifacts preserved: $PUBLIC_RUN_DIR" >&2
+  else
+    echo "ERROR: isolated child produced no run directory: $CHILD_RUN_DIR" >&2
+    CHILD_EXIT=1
+  fi
+
+  case "$ISO_HARNESS_ROOT" in
+    /tmp/vista_eval_harness.*) rm -rf -- "$ISO_HARNESS_ROOT" ;;
+    *) echo "[run_eval] refusing unexpected cleanup target: $ISO_HARNESS_ROOT" >&2 ;;
+  esac
+  case "$ISO_AGENT_ROOT" in
+    /tmp/vista_eval_agent.*) rm -rf -- "$ISO_AGENT_ROOT" ;;
+    *) echo "[run_eval] refusing unexpected cleanup target: $ISO_AGENT_ROOT" >&2 ;;
+  esac
+  exit "$CHILD_EXIT"
+fi
 
 # ---------- locate the chosen CLI binary ----------
 # When invoked via `bash run_eval.sh` from zsh, the child bash often misses
@@ -338,9 +463,10 @@ fi
 
 # Final sanity: our fixed ports must be free now. Docker is already torn down
 # above, so any remaining listener is a stray non-docker process — almost always
-# an editor's port-forward proxy (e.g. VS Code grabs a port an app exposed and
-# keeps the proxy alive after teardown) or a leftover dev server. Killing it is
-# safe and prevents one stuck port from cascading failures across a whole batch.
+# an editor's port-forward proxy, Docker/Colima forwarding process, or a leftover
+# dev server. Never kill an unknown host process by default: a forwarding helper
+# may own the Docker socket/VM lifecycle. Set KILL_STRAY_PORTS=1 only when the
+# caller has intentionally opted into terminating non-Docker listeners.
 for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
   if port_in_use "$port" && command -v lsof >/dev/null 2>&1; then
     holders="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ')"
@@ -355,23 +481,24 @@ for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
           *) safe_holders="${safe_holders} ${holder}" ;;
         esac
       done
-      if [[ -n "${safe_holders// /}" ]]; then
+      if [[ -n "${safe_holders// /}" && "${KILL_STRAY_PORTS:-0}" == "1" ]]; then
         echo "[run_eval] port $port held by PID(s)${safe_holders} after teardown — killing stray listener" >&2
         kill $safe_holders 2>/dev/null || true
       fi
       sleep 1
-      if port_in_use "$port" && [[ -n "${safe_holders// /}" ]]; then
+      if port_in_use "$port" && [[ -n "${safe_holders// /}" && "${KILL_STRAY_PORTS:-0}" == "1" ]]; then
         kill -9 $safe_holders 2>/dev/null || true
         sleep 1
       fi
     fi
   fi
   if port_in_use "$port"; then
-    echo "ERROR: port $port still in use after kill attempt — non-docker process holding it." >&2
+    echo "ERROR: port $port is still in use after Docker teardown." >&2
     if command -v lsof >/dev/null 2>&1; then
       lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | sed 's/^/    /' >&2
       echo "  Use other ports for this run:" >&2
       echo "    FRONTEND_PORT=39000 BACKEND_PORT=39001 $0 $*" >&2
+      echo "  Or, only if the listener is known safe to terminate, set KILL_STRAY_PORTS=1." >&2
     fi
     exit 1
   fi
@@ -497,6 +624,9 @@ docker compose -p $COMPOSE_PROJECT up --build
   via the relative path \`../inputs/\` from your workspace cwd.
 - Your write workspace is the current working directory (\`$RUN_DIR/workspace/\`).
   Put all generated code, \`docker-compose.yml\`, README, etc. directly here.
+- **Evaluation isolation:** do not inspect, search, read, or copy files outside the
+  current workspace and \`../inputs/\`. In particular, never access other run
+  directories, prior agents' workspaces, benchmark answers, anchors, or test data.
 ${PRELOAD_HINT:-}
 ${SKILL_HINT:-}
 - When finished, the workspace must be runnable with the single command in the
@@ -753,14 +883,15 @@ $USER_PROMPT"
     #   -p                          : print / non-interactive (full tool access)
     #   --force                     : auto-approve every command (docker/npm/etc.)
     #   --trust                     : trust the workspace without prompting (headless)
-    #   --workspace                 : project root (we also cd in, belt + braces)
+    #   --sandbox enabled           : OS-level workspace filesystem isolation
+    #   --workspace                 : writable project root (we also cd in)
+    #   --add-dir                   : only additional readable root is inputs/
     #   --output-format stream-json : event envelope is Claude-shaped
     #                                 (type: system/user/assistant/result w/ is_error)
-    # No --append-system-prompt and no --add-dir, so: (a) prepend the system
-    # prompt to the user prompt (like codex/gemini), and (b) let the agent read
-    # ../inputs/ directly — verified headless can read sibling dirs without
-    # --add-dir. Because the envelope is Claude-shaped we tee to the SAME
-    # events.jsonl and reuse analyze_run.py / analyze_edits.py below.
+    # No --append-system-prompt, so prepend the system prompt to the user prompt
+    # (like codex/gemini). Explicit --add-dir grants read access only to inputs/.
+    # Because the envelope is Claude-shaped we tee to the SAME events.jsonl and
+    # reuse analyze_run.py / analyze_edits.py below.
     # Unset CURSOR_API_KEY so the subscription login token is used, not a stray
     # env key (mirrors the claude branch unsetting ANTHROPIC_API_KEY).
     COMBINED_PROMPT="$(cat "$RUNTIME_PROMPT")
@@ -791,7 +922,9 @@ $USER_PROMPT"
         --model "$MODEL" \
         --force \
         --trust \
+        --sandbox enabled \
         --workspace "$RUN_DIR/workspace" \
+        --add-dir "$RUN_DIR/inputs" \
         --output-format stream-json \
         "$COMBINED_PROMPT" \
         < /dev/null \

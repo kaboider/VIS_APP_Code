@@ -26,6 +26,44 @@ import os
 import sys
 
 
+def event_stats(events_path):
+    """Derive telemetry that Cursor emits even when its result event is missing."""
+    stats = {
+        "event_count": 0,
+        "elapsed_s": 0.0,
+        "reasoning_steps": 0,
+        "assistant_messages": 0,
+        "tool_calls": 0,
+        "tool_call_counts": {},
+        "has_result_event": False,
+    }
+    if not os.path.exists(events_path):
+        return stats
+    with open(events_path) as fh:
+        for line in fh:
+            try:
+                ev = json.loads(line)
+            except Exception:
+                continue
+            stats["event_count"] += 1
+            elapsed = ev.get("_elapsed_s")
+            if isinstance(elapsed, (int, float)):
+                stats["elapsed_s"] = max(stats["elapsed_s"], float(elapsed))
+            if ev.get("type") == "thinking" and ev.get("subtype") == "completed":
+                stats["reasoning_steps"] += 1
+            elif ev.get("type") == "assistant":
+                stats["assistant_messages"] += 1
+            elif ev.get("type") == "result":
+                stats["has_result_event"] = True
+            elif ev.get("type") == "tool_call" and ev.get("subtype") == "completed":
+                stats["tool_calls"] += 1
+                payload = ev.get("tool_call") or {}
+                name = next(iter(payload), "unknown")
+                counts = stats["tool_call_counts"]
+                counts[name] = counts.get(name, 0) + 1
+    return stats
+
+
 def last_result_usage(events_path):
     """Return the usage dict from the last `result` event, or None."""
     usage = None
@@ -73,6 +111,23 @@ def main():
     summ = doc.setdefault("summary", {})
     changed = False
 
+    # Cursor always emits timestamped stream events, even if its terminal result
+    # event never arrives. Preserve those reliable wall-clock/tool statistics.
+    stats = event_stats(ev)
+    derived = {
+        "event_count": stats["event_count"],
+        "wall_clock_s": round(stats["elapsed_s"], 3),
+        "reasoning_steps": stats["reasoning_steps"],
+        "assistant_messages": stats["assistant_messages"],
+        "tool_calls": stats["tool_calls"],
+        "tool_call_counts": stats["tool_call_counts"],
+        "has_result_event": stats["has_result_event"],
+    }
+    for key, value in derived.items():
+        if summ.get(key) != value:
+            summ[key] = value
+            changed = True
+
     # (1) map result-event usage (camelCase) -> tokens block
     usage = last_result_usage(ev)
     if usage:
@@ -92,6 +147,15 @@ def main():
         else:
             tk.update(mapped)
             tk["_source"] = "cursor_result_event"
+            changed = True
+    else:
+        tk = summ.setdefault("tokens", {})
+        if tk.get("_source") != "unavailable_no_cursor_result_event":
+            tk["_source"] = "unavailable_no_cursor_result_event"
+            tk["_note"] = (
+                "Cursor's intermediate stream has no token counts and the CLI "
+                "did not emit its terminal result event before watchdog cleanup."
+            )
             changed = True
 
     # (2) synthetic success when work is present but no result event fired
