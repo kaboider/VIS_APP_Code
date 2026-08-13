@@ -110,14 +110,15 @@ case "$CLI" in
     INSTALL_HINT="Install the Antigravity CLI so 'agy' is on PATH (default ~/.local/bin/agy); run 'agy' once to sign in. List models with 'agy models'."
     ;;
   cursor)
-    # Cursor Agent CLI (`cursor-agent`). Composer is Cursor's own model family;
+    # Cursor Agent CLI (`agent`; `cursor-agent` is the legacy-compatible alias).
+    # Composer is Cursor's own model family;
     # `composer-2.5` is the slug (composer-2.5-fast is Cursor's default).
-    # Auth is subscription login (`cursor-agent login`) OR CURSOR_API_KEY.
+    # Auth is subscription login (`agent login`) OR CURSOR_API_KEY.
     : "${MODEL:=composer-2.5}"
-    BIN_NAME="cursor-agent"
+    BIN_NAME="agent"
     BIN_VAR="CURSOR_BIN"
-    EXTRA_PROBE_PATHS=("$HOME/.local/bin/cursor-agent" "$HOME/.cursor/bin/cursor-agent")
-    INSTALL_HINT="curl https://cursor.com/install -fsS | bash   (then run 'cursor-agent login' once)"
+    EXTRA_PROBE_PATHS=("$HOME/.local/bin/agent" "$HOME/.local/bin/cursor-agent" "$HOME/.cursor/bin/cursor-agent")
+    INSTALL_HINT="curl https://cursor.com/install -fsS | bash   (then run 'agent login' once)"
     ;;
   copilot)
     # GitHub Copilot CLI (`copilot`). MAI-Code-1-Flash's model slug is
@@ -472,11 +473,13 @@ for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
     holders="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ')"
     if [[ -n "${holders// /}" ]]; then
       safe_holders=""
+      forwarding_holders=""
       for holder in $holders; do
         holder_cmd="$(ps -p "$holder" -o command= 2>/dev/null || true)"
         case "$holder_cmd" in
           *colima*|*lima*|*hostagent*|*ssh*)
             echo "[run_eval] port $port held by Colima forwarding PID $holder — not killing it" >&2
+            forwarding_holders="${forwarding_holders} ${holder}"
             ;;
           *) safe_holders="${safe_holders} ${holder}" ;;
         esac
@@ -485,7 +488,17 @@ for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
         echo "[run_eval] port $port held by PID(s)${safe_holders} after teardown — killing stray listener" >&2
         kill $safe_holders 2>/dev/null || true
       fi
-      sleep 1
+      # Colima's SSH forwarding sometimes releases several seconds after
+      # `docker compose down`. It is part of the Docker VM lifecycle and must
+      # never be killed; wait briefly for its listener to disappear instead.
+      if [[ -n "${forwarding_holders// /}" ]]; then
+        for _wait_port_release in {1..20}; do
+          port_in_use "$port" || break
+          sleep 1
+        done
+      else
+        sleep 1
+      fi
       if port_in_use "$port" && [[ -n "${safe_holders// /}" && "${KILL_STRAY_PORTS:-0}" == "1" ]]; then
         kill -9 $safe_holders 2>/dev/null || true
         sleep 1
@@ -879,7 +892,7 @@ $USER_PROMPT"
     EXIT=${PIPESTATUS[0]}
     ;;
   cursor)
-    # Cursor Agent CLI (`cursor-agent`) — headless surface mirrors Claude Code:
+    # Cursor Agent CLI (`agent`; formerly `cursor-agent`) — headless surface mirrors Claude Code:
     #   -p                          : print / non-interactive (full tool access)
     #   --force                     : auto-approve every command (docker/npm/etc.)
     #   --trust                     : trust the workspace without prompting (headless)
@@ -899,21 +912,24 @@ $USER_PROMPT"
 ---
 
 $USER_PROMPT"
-    # cursor-agent headless does NOT reliably terminate. Observed repeatedly:
+    # Cursor Agent headless does NOT reliably terminate. Observed repeatedly:
     # the agent finishes ALL work (builds the app, runs `docker compose up` to
     # self-verify, delivers its final summary message) but then cursor-agent
     # FAILS to emit the terminal `result` event and never exits — it sits at 0%
     # CPU indefinitely (a self-launched `docker compose up` can also keep the
     # stdout pipe open). A blunt wall-clock `timeout` would waste 45m per task.
-    # So we use an INACTIVITY watchdog: cursor-agent streams events continuously
+    # So we use an INACTIVITY watchdog: Cursor Agent streams events continuously
     # while working, so once events.jsonl stops growing for CURSOR_IDLE_KILL
-    # seconds the agent is done-or-wedged — kill the cursor-agent process tree,
+    # seconds the agent is done-or-wedged — kill the Cursor Agent process tree,
     # which closes the pipe so tee EOFs and analysis proceeds normally (verified:
-    # killing cursor-agent lets run_eval finalize cleanly). CURSOR_TIMEOUT is a
+    # killing Cursor Agent lets run_eval finalize cleanly). CURSOR_TIMEOUT is a
     # secondary hard wall-clock cap. stdin from /dev/null so it never blocks on a
-    # prompt. The cursor-agent cmdline contains the unique RUN_ID (via
+    # prompt. The agent cmdline contains the unique RUN_ID (via
     # --workspace), so pkill -f scopes the kill to THIS run (concurrency-safe).
-    CURSOR_IDLE_KILL="${CURSOR_IDLE_KILL:-180}"
+    # Long Docker builds and verification commands can legitimately be quiet
+    # for several minutes. Ten minutes avoids terminating healthy tasks while
+    # still bounding the known post-completion hang.
+    CURSOR_IDLE_KILL="${CURSOR_IDLE_KILL:-600}"
     CURSOR_TIMEOUT="${CURSOR_TIMEOUT:-45m}"
     TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
     ( cd "$RUN_DIR/workspace" && unset CURSOR_API_KEY && \
@@ -937,10 +953,10 @@ $USER_PROMPT"
         [[ -f "$EVENTS_PATH" ]] || continue
         idle=$(python3 -c "import os,time;print(int(time.time()-os.path.getmtime('$EVENTS_PATH')))" 2>/dev/null || echo 0)
         if [[ "${idle:-0}" -gt "$CURSOR_IDLE_KILL" ]]; then
-          echo "[run_eval] cursor-agent idle ${idle}s (>${CURSOR_IDLE_KILL}s) — agent done or wedged; terminating its process tree" >&2
-          pkill -TERM -f "cursor-agent.*$RUN_ID" 2>/dev/null || true
+          echo "[run_eval] Cursor Agent idle ${idle}s (>${CURSOR_IDLE_KILL}s) — agent done or wedged; terminating its process tree" >&2
+          pkill -TERM -f "(cursor-agent|/agent).*$RUN_ID" 2>/dev/null || true
           sleep 4
-          pkill -KILL -f "cursor-agent.*$RUN_ID" 2>/dev/null || true
+          pkill -KILL -f "(cursor-agent|/agent).*$RUN_ID" 2>/dev/null || true
           break
         fi
       done
@@ -1106,9 +1122,11 @@ if [[ "$CLI" == "claude" || "$CLI" == "cursor" ]]; then
   # Content-level read/write log (agent-side): full Write/Edit/Read/Bash CONTENT,
   # not just the byte/line metadata in edits.jsonl. Offline, zero-cost — parses
   # the events.jsonl that already exists. The only source that carries READ content.
-  python3 "$TOOLS_DIR/agent_content_log.py" "$EVENTS_PATH" -w "$RUN_DIR/workspace" \
-    -o "$RUN_DIR/logs/content_log.jsonl" \
-    || echo "(agent_content_log.py failed; events.jsonl is intact)"
+  if [[ -f "$TOOLS_DIR/agent_content_log.py" ]]; then
+    python3 "$TOOLS_DIR/agent_content_log.py" "$EVENTS_PATH" -w "$RUN_DIR/workspace" \
+      -o "$RUN_DIR/logs/content_log.jsonl" \
+      || echo "(agent_content_log.py failed; events.jsonl is intact)"
+  fi
   # cursor-specific finalize: (1) map the result-event usage (camelCase, only on
   # the terminal `result` event) into summary.json's tokens block — analyze_run.py
   # leaves them zero because cursor doesn't put usage on per-assistant messages;

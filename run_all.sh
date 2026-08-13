@@ -85,8 +85,18 @@ echo                                                                  | tee -a "
 
 ok=0; fail=0; skipped=0
 START_ALL=$(date +%s)
+task_index=0
 
 for t in "${TASKS[@]}"; do
+  # Give every task its own host-port pair. Colima's SSH port forwarding can
+  # outlive `docker compose down` briefly; reusing one fixed pair makes the
+  # immediately following task fail even though its workspace is valid.
+  # Explicit caller-provided ports still win.
+  frontend_port_base="${FRONTEND_PORT_BASE:-38000}"
+  backend_port_base="${BACKEND_PORT_BASE:-38001}"
+  task_frontend_port="${FRONTEND_PORT:-$((frontend_port_base + task_index * 10))}"
+  task_backend_port="${BACKEND_PORT:-$((backend_port_base + task_index * 10))}"
+  task_index=$((task_index + 1))
   echo "----------------------------------------------------------" | tee -a "$SUMMARY"
   echo " [$(date +%H:%M:%S)] Task: $t  (variant=$VARIANT)"          | tee -a "$SUMMARY"
 
@@ -112,7 +122,8 @@ for t in "${TASKS[@]}"; do
 
   task_log="$LOG_DIR/${BATCH_TS}_${t}_${VARIANT//\//_}.log"
   start=$(date +%s)
-  if ./run_eval.sh --task "$t" --variant "$VARIANT" \
+  if FRONTEND_PORT="$task_frontend_port" BACKEND_PORT="$task_backend_port" \
+       ./run_eval.sh --task "$t" --variant "$VARIANT" \
        ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} 2>&1 | tee "$task_log"; then
     elapsed=$(( $(date +%s) - start ))
     # Trailing `*` matches the optional `_codex` / `_gemini` suffix that
