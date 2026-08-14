@@ -623,6 +623,10 @@ RUNTIME_PROMPT="$RUN_DIR/agent_system_prompt.md"
 4. **Do NOT set \`container_name:\` on any service.** Let compose name them.
 5. **Do NOT set \`name:\` on any \`volumes:\` or \`networks:\` entry.** Let compose prefix them with the project name.
 6. CORS on the backend must allow \`http://localhost:$FRONTEND_PORT\`.
+7. During unattended self-verification, start Compose in detached mode
+   (\`docker compose -p $COMPOSE_PROJECT up -d --build\`). Never leave a
+   foreground \`docker compose ... up\` attached to the agent, because its log
+   stream prevents the headless CLI from emitting the terminal result event.
 
 ### README quick-start MUST read
 
