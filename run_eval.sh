@@ -506,6 +506,13 @@ for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
     fi
   fi
   if port_in_use "$port"; then
+    # CAMEL generation does not bind FRONTEND/BACKEND; those ports are for a
+    # later docker eval. Occupied ports must not abort isolation (travel-booking
+    # was dying in 1s on a leftover 39209 listener).
+    if [[ "${CAMEL_SINGLE:-0}" == "1" || "${SKIP_EVAL:-0}" == "1" ]]; then
+      echo "[run_eval] WARN: port $port in use; agent generation does not bind it — continuing" >&2
+      continue
+    fi
     echo "ERROR: port $port is still in use after Docker teardown." >&2
     if command -v lsof >/dev/null 2>&1; then
       lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | sed 's/^/    /' >&2
@@ -782,15 +789,21 @@ case "$CLI" in
     CAMEL_KEY_FILE="${CAMEL_KEY_FILE:-$TASKS_ROOT/../api_keys/chatgpt.txt}"
     if [[ "${CAMEL_SINGLE:-0}" == "1" ]]; then
       echo "[run_eval] camel: SINGLE-agent mode (official toolkits)"
-      "$BIN" "$TOOLS_DIR/camel_runner_single.py" \
-        --run-dir "$RUN_DIR" \
-        --api-key-file "$CAMEL_KEY_FILE" \
-        --model "$MODEL" \
-        --reasoning-effort "${CAMEL_REASONING_EFFORT:-medium}" \
-        --prompt-cache-retention "${CAMEL_PROMPT_CACHE_RETENTION:-24h}" \
-        --max-steps "${CAMEL_MAX_STEPS:-12}" \
-        --system-prompt "$RUNTIME_PROMPT" \
+      CAMEL_BASE_URL="${CAMEL_API_URL:-${OPENAI_API_BASE_URL:-}}"
+      CAMEL_SINGLE_ARGS=(
+        --run-dir "$RUN_DIR"
+        --api-key-file "$CAMEL_KEY_FILE"
+        --model "$MODEL"
+        --api-mode "${CAMEL_API_MODE:-responses}"
+        --reasoning-effort "${CAMEL_REASONING_EFFORT:-medium}"
+        --prompt-cache-retention "${CAMEL_PROMPT_CACHE_RETENTION:-24h}"
+        --max-steps "${CAMEL_MAX_STEPS:-12}"
+        --max-iteration "${CAMEL_MAX_ITERATION:-6}"
+        --system-prompt "$RUNTIME_PROMPT"
         --timeout "${CAMEL_TIMEOUT:-3600}"
+      )
+      [[ -n "$CAMEL_BASE_URL" ]] && CAMEL_SINGLE_ARGS+=(--base-url "$CAMEL_BASE_URL")
+      "$BIN" "$TOOLS_DIR/camel_runner_single.py" "${CAMEL_SINGLE_ARGS[@]}"
       EXIT=$?
     else
       "$BIN" "$TOOLS_DIR/camel_runner.py" \

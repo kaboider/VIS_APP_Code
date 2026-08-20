@@ -1,0 +1,71 @@
+tools:
+  - class_name: rl.tools.WriteFileTool
+    config:
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: write_file
+        description: Write a text file inside the workspace (relative path only). Creates parent directories.
+        parameters:
+          type: object
+          properties:
+            path:
+              type: string
+              description: Relative path under workspace/, e.g. docker-compose.yml or frontend/index.html
+            content:
+              type: string
+              description: Full file contents
+          required:
+            - path
+            - content
+  - class_name: rl.tools.ReadFileTool
+    config:
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: read_file
+        description: Read a text file from workspace/ or ../inputs/ (task spec and page JSON).
+        parameters:
+          type: object
+          properties:
+            path:
+              type: string
+              description: Relative path, e.g. docker-compose.yml or ../inputs/description.md
+          required:
+            - path
+  - class_name: rl.tools.ListDirTool
+    config:
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: list_dir
+        description: List files and directories in the workspace (or ../inputs). Skips node_modules and build artifacts.
+        parameters:
+          type: object
+          properties:
+            path:
+              type: string
+              description: Relative directory to list. Defaults to .
+          required: []
+  - class_name: rl.tools.ShellExecTool
+    config:
+      type: native
+    tool_schema:
+      type: function
+      function:
+        name: shell_exec
+        description: Run a short shell command with cwd=workspace. No docker, no sudo, no runtime downloads.
+        parameters:
+          type: object
+          properties:
+            command:
+              type: string
+              description: Shell command to run
+            timeout:
+              type: number
+              description: Timeout in seconds (default 30, max 60)
+          required:
+            - command

@@ -53,8 +53,17 @@ run_with_timeout() {
 [[ -f "$EVAL_PY"  ]] || { echo "ERROR: eval_run.py not found: $EVAL_PY"  >&2; exit 1; }
 
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not on PATH" >&2; exit 1; }
+STRUCTURAL_FALLBACK="${STRUCTURAL_FALLBACK:-0}"
 if [[ "$SKIP_DOCKER" != "1" ]]; then
-  command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not on PATH (set SKIP_DOCKER=1 if services already running)" >&2; exit 1; }
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "WARN: docker not on PATH — structural fallback scores" >&2
+    SKIP_DOCKER=1
+    STRUCTURAL_FALLBACK=1
+  elif ! docker info >/dev/null 2>&1; then
+    echo "WARN: docker daemon not usable (permission/socket) — structural fallback scores" >&2
+    SKIP_DOCKER=1
+    STRUCTURAL_FALLBACK=1
+  fi
 fi
 
 echo "================================================================"
@@ -205,7 +214,10 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
   else
     # ---------- bring up agent's app ----------
     DOCKER_UP_OK=1
-    if [[ "$SKIP_DOCKER" != "1" ]]; then
+    if [[ "$SKIP_DOCKER" == "1" && "$STRUCTURAL_FALLBACK" == "1" ]]; then
+      # Structural-only: do not poll frontend HTTP or run Playwright.
+      DOCKER_UP_OK=0
+    elif [[ "$SKIP_DOCKER" != "1" ]]; then
       if [[ ! -f "$WORKSPACE/docker-compose.yml" && ! -f "$WORKSPACE/compose.yaml" && ! -f "$WORKSPACE/compose.yml" ]]; then
         echo "  WARN — no docker-compose.yml in $WORKSPACE; skipping docker up (eval will likely fail to reach app)"
         DOCKER_UP_OK=0
@@ -301,6 +313,11 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
       fi
     else
       echo "  [eval] skipped — docker not brought up"
+      if [[ "$STRUCTURAL_FALLBACK" == "1" ]]; then
+        echo "  [eval] structural fallback (no docker/Playwright)"
+        python3 "$SCRIPT_DIR/tools/structural_eval.py" "$RUN_DIR" \
+          || echo "  [eval] structural fallback failed"
+      fi
     fi
 
     # ---------- always tear docker down ----------
@@ -317,8 +334,11 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
     BEH="$(read_score_field "$RESULT" avg_behavior_critical)"
     COMB="$(read_score_field "$RESULT" combined_score_critical)"
     BYPASS="$(read_score_field "$RESULT" auth_bypass_used)"
-    echo "  → n_crit=$N_CRIT  found=$FOUND  loc=$LOC  beh=$BEH  COMBINED=$COMB  bypass=$BYPASS"
-    SUMMARY_ROWS+=("$RUN_ID,$TASK,$VARIANT,$CLI,$MODEL,$N_CRIT,$FOUND,$LOC,$BEH,$COMB,$BYPASS,OK")
+    MODE="$(read_score_field "$RESULT" eval_mode)"
+    STATUS="OK"
+    [[ "$MODE" == "structural_no_docker" ]] && STATUS="STRUCTURAL"
+    echo "  → n_crit=$N_CRIT  found=$FOUND  loc=$LOC  beh=$BEH  COMBINED=$COMB  bypass=$BYPASS  status=$STATUS"
+    SUMMARY_ROWS+=("$RUN_ID,$TASK,$VARIANT,$CLI,$MODEL,$N_CRIT,$FOUND,$LOC,$BEH,$COMB,$BYPASS,$STATUS")
     OK=$((OK+1))
   else
     echo "  → no eval_result.json produced"
