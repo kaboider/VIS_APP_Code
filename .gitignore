@@ -10,3 +10,6 @@ __pycache__/
 
 # Node
 node_modules/
+
+_runs/
+_runs_qwen3.8-27b_c4_r2r3/

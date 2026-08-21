@@ -34,6 +34,11 @@ EVAL_PY="${EVAL_PY:-$SCRIPT_DIR/tools/eval_run.py}"
 SKIP_DOCKER="${SKIP_DOCKER:-0}"
 FORCE="${FORCE:-0}"
 FILTER="${FILTER:-*}"
+# How wide to sweep docker before bringing each run's app up. Mirrors run_eval.sh:
+#   all (default) — every compose project on the daemon (dedicated single-user host)
+#   own           — only `eval_*` projects, so a SHARED daemon's other containers
+#                   (and any concurrently-running eval lane) survive
+DOCKER_TEARDOWN="${DOCKER_TEARDOWN:-all}"
 DOCKER_WAIT_TIMEOUT="${DOCKER_WAIT_TIMEOUT:-300}"   # seconds — for `compose up --wait` build phase
 HTTP_WAIT_TIMEOUT="${HTTP_WAIT_TIMEOUT:-90}"        # seconds — extra HTTP poll on frontend port
 SUMMARY_CSV="$RUNS_ROOT/eval_summary.csv"
@@ -210,10 +215,14 @@ for RUN_DIR in "${RUN_DIRS[@]}"; do
         echo "  WARN — no docker-compose.yml in $WORKSPACE; skipping docker up (eval will likely fail to reach app)"
         DOCKER_UP_OK=0
       else
-        # Tear down anything lingering from a prior run on this host (single-docker-host assumption).
+        # Tear down anything lingering from a prior run on this host (single-docker-host
+        # assumption). DOCKER_TEARDOWN=own narrows this to `eval_*` projects for shared
+        # daemons — the app we are about to score is itself an `eval_*` project, so it
+        # still gets a clean slate.
         if command -v docker >/dev/null 2>&1; then
           while IFS= read -r p; do
             [[ -z "$p" ]] && continue
+            [[ "$DOCKER_TEARDOWN" == "own" && "$p" != eval_* ]] && continue
             docker compose -p "$p" down --remove-orphans >/dev/null 2>&1 || true
           done < <(docker compose ls -q 2>/dev/null)
           # Colima's host-side port forward can outlive `compose down` very

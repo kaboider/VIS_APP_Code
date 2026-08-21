@@ -7,6 +7,8 @@
 #   --cli codex                 — OpenAI Codex CLI; `codex /login` (OAuth) or OPENAI_API_KEY
 #   --cli gemini                — Google Gemini CLI; `gemini` (Google login) or GEMINI_API_KEY
 #   --cli antigravity           — Google Antigravity CLI (`agy`); `agy` once to sign in
+#   --cli qwen                  — Qwen Code CLI (`qwen`) against an OpenAI-compatible
+#                                 endpoint (default: local vLLM at OPENAI_BASE_URL)
 #
 # The thin wrappers run_eval_claude.sh / run_eval_codex.sh / run_eval_gemini.sh /
 # run_eval_antigravity.sh just `exec` this script with --cli set.
@@ -99,6 +101,17 @@ case "$CLI" in
     BIN_VAR="GEMINI_BIN"
     INSTALL_HINT="npm install -g @google/gemini-cli   (then run 'gemini' once to do Google OAuth, OR set GEMINI_API_KEY from https://aistudio.google.com/apikey)"
     ;;
+  qwen)
+    # Qwen Code CLI (`qwen`) — a gemini-cli fork. Used here to drive a SELF-HOSTED
+    # open-weight model: --model is whatever the OpenAI-compatible server
+    # advertises (vLLM echoes the HF repo id, e.g. Qwen/Qwen3.8-27B). Auth is
+    # --auth-type openai + OPENAI_BASE_URL / OPENAI_API_KEY (no vendor login).
+    : "${MODEL:=Qwen/Qwen3.8-27B}"
+    BIN_NAME="qwen"
+    BIN_VAR="QWEN_BIN"
+    EXTRA_PROBE_PATHS=("$HOME/.qwen/bin/qwen" "$HOME/miniconda3/envs/codexcli/bin/qwen")
+    INSTALL_HINT="npm install -g @qwen-code/qwen-code@latest   (needs Node >= 22; then serve a model, e.g. 'vllm serve Qwen/Qwen3.8-27B', and set OPENAI_BASE_URL)"
+    ;;
   antigravity)
     # Google Antigravity CLI, launched as `agy`. Model is a display-name string
     # (run `agy models` to list) — an unknown value silently falls back to the
@@ -152,7 +165,7 @@ case "$CLI" in
     INSTALL_HINT="python3.13 -m venv tasks/.camel-venv && tasks/.camel-venv/bin/pip install camel-ai 'mcp==1.12.4'"
     ;;
   *)
-    echo "Unknown --cli '$CLI' (expected: claude, codex, gemini, antigravity, cursor, copilot, kimi, camel)" >&2
+    echo "Unknown --cli '$CLI' (expected: claude, codex, gemini, qwen, antigravity, cursor, copilot, kimi, camel)" >&2
     exit 1
     ;;
 esac
@@ -215,9 +228,24 @@ EOF
     fi
     CHILD_COMMAND=(sandbox-exec -f "$SANDBOX_PROFILE" "${CHILD_COMMAND[@]}")
     OS_SANDBOX_ENFORCED=1
+  elif command -v bwrap >/dev/null 2>&1 && bwrap --dev-bind / / -- true >/dev/null 2>&1; then
+    # Linux equivalent of the macOS deny-list, via unprivileged user namespaces
+    # (no root, no setuid helper). `--dev-bind / /` keeps the host filesystem —
+    # including /tmp and the docker socket the agent needs — then an empty tmpfs
+    # is layered over SOURCE_ROOT so private benchmark files (anchors, evaluator
+    # code, prior runs) are not merely un-navigated but absent in the namespace.
+    # Inherited by every descendant, so an absolute path or `cd` cannot recover them.
+    BWRAP_ARGS=(--dev-bind / / --tmpfs "$SOURCE_ROOT")
+    if bwrap "${BWRAP_ARGS[@]}" -- head -c 1 "$SOURCE_ROOT/run_eval.sh" >/dev/null 2>&1; then
+      echo "ERROR: benchmark sandbox self-test failed; private source root remained readable" >&2
+      exit 1
+    fi
+    CHILD_COMMAND=(bwrap "${BWRAP_ARGS[@]}" -- "${CHILD_COMMAND[@]}")
+    OS_SANDBOX_ENFORCED=1
+    echo "[run_eval] sandbox: bwrap user-namespace mask over $SOURCE_ROOT" >&2
   else
     [[ "${ALLOW_UNSANDBOXED_EVAL:-0}" == "1" ]] || {
-      echo "ERROR: sandbox-exec unavailable; set ALLOW_UNSANDBOXED_EVAL=1 to explicitly accept directory-only isolation" >&2
+      echo "ERROR: no usable sandbox (need macOS sandbox-exec, or Linux bwrap with unprivileged user namespaces); set ALLOW_UNSANDBOXED_EVAL=1 to explicitly accept directory-only isolation" >&2
       exit 1
     }
     OS_SANDBOX_ENFORCED=0
@@ -433,33 +461,54 @@ COMPOSE_PROJECT="$(printf '%s' "eval_${SAFE_VARIANT}_${TASK}${CLI_TAG}" \
                   | tr -c 'a-z0-9_' '_' \
                   | sed 's/_\{2,\}/_/g; s/_$//')"
 
-# ---------- pre-flight: shut down everything currently running on docker ----------
+# ---------- pre-flight: shut down docker leftovers ----------
 # Single-docker host: any container left over from a prior run could clash on
-# memory, ports, or compose network/volume names. Tear them all down before
-# starting this run, regardless of which ports they hold.
+# memory, ports, or compose network/volume names.
+#
+# DOCKER_TEARDOWN picks how wide to sweep:
+#   all  (default) — every compose project + every standalone container on the
+#                    daemon. Correct on a dedicated single-user box.
+#   own            — only compose projects named `eval_*` (what this harness
+#                    creates). Use on a SHARED docker daemon, where `docker ps`
+#                    also lists other users' containers and the `all` sweep
+#                    would stop their work mid-run.
+#   none           — sweep nothing (same as PRESERVE_OTHER_DOCKER=1, which is
+#                    kept for the parallel-build scripts: there a sibling eval
+#                    is running concurrently, so even `own` would kill it).
 port_in_use() { (echo > "/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
-if command -v docker >/dev/null 2>&1 && [[ "${PRESERVE_OTHER_DOCKER:-0}" != "1" ]]; then
-  # 1) Bring down every running compose project (graceful: removes networks + orphans).
+DOCKER_TEARDOWN="${DOCKER_TEARDOWN:-all}"
+[[ "${PRESERVE_OTHER_DOCKER:-0}" == "1" ]] && DOCKER_TEARDOWN="none"
+
+if command -v docker >/dev/null 2>&1 && [[ "$DOCKER_TEARDOWN" != "none" ]]; then
+  # 1) Bring down running compose projects (graceful: removes networks + orphans).
   while IFS= read -r p; do
     [[ -z "$p" ]] && continue
+    if [[ "$DOCKER_TEARDOWN" == "own" && "$p" != eval_* ]]; then
+      echo "[run_eval] leaving foreign compose project '$p' alone (DOCKER_TEARDOWN=own)"
+      continue
+    fi
     echo "[run_eval] bringing down compose project '$p'"
     docker compose -p "$p" down --remove-orphans >/dev/null 2>&1 || true
   done < <(docker compose ls -q 2>/dev/null)
 
-  # 2) Stop any remaining standalone containers (not managed by compose).
-  leftover=$(docker ps -q 2>/dev/null || true)
-  if [[ -n "$leftover" ]]; then
-    echo "[run_eval] stopping leftover standalone container(s): $leftover"
-    docker stop $leftover >/dev/null 2>&1 || true
-    docker rm   $leftover >/dev/null 2>&1 || true
+  # 2) Stop any remaining standalone containers (not managed by compose). These
+  #    carry no project label to filter on, so `own` skips them entirely rather
+  #    than guess whose they are.
+  if [[ "$DOCKER_TEARDOWN" == "all" ]]; then
+    leftover=$(docker ps -q 2>/dev/null || true)
+    if [[ -n "$leftover" ]]; then
+      echo "[run_eval] stopping leftover standalone container(s): $leftover"
+      docker stop $leftover >/dev/null 2>&1 || true
+      docker rm   $leftover >/dev/null 2>&1 || true
+    fi
   fi
 
   sleep 1   # let the OS release sockets
 fi
 
-if [[ "${PRESERVE_OTHER_DOCKER:-0}" == "1" ]]; then
-  echo "[run_eval] PRESERVE_OTHER_DOCKER=1 — skipping global Docker teardown for parallel build"
+if [[ "$DOCKER_TEARDOWN" == "none" ]]; then
+  echo "[run_eval] DOCKER_TEARDOWN=none — skipping Docker teardown (parallel build / shared host)"
 fi
 
 # Final sanity: our fixed ports must be free now. Docker is already torn down
@@ -470,7 +519,13 @@ fi
 # caller has intentionally opted into terminating non-Docker listeners.
 for port in "$FRONTEND_PORT" "$BACKEND_PORT"; do
   if port_in_use "$port" && command -v lsof >/dev/null 2>&1; then
-    holders="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ')"
+    # `|| true` is load-bearing under `set -euo pipefail`: lsof exits 1 when it
+    # matches nothing, and with pipefail that failure propagates out of the
+    # command substitution and kills the script *silently* — before the explicit
+    # "port still in use" error below can ever print. lsof matches nothing
+    # whenever the listener is a root-owned docker-proxy and we are not root,
+    # i.e. exactly the case this check exists to report.
+    holders="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ' || true)"
     if [[ -n "${holders// /}" ]]; then
       safe_holders=""
       forwarding_holders=""
@@ -866,6 +921,59 @@ $USER_PROMPT"
       | python3 -u "$TOOLS_DIR/tee_jsonl.py" "$RUN_DIR/logs/gemini_events.jsonl"
     EXIT=${PIPESTATUS[0]}
     ;;
+  qwen)
+    # Qwen Code CLI — same flag surface as gemini (it's a fork), but pointed at an
+    # OpenAI-compatible server instead of a vendor cloud:
+    #   --auth-type openai    : route via the OpenAI protocol → OPENAI_BASE_URL
+    #   --model               : model id as the server advertises it
+    #   --yolo                : auto-approve every tool/command
+    #   --include-directories : extra trusted dirs the agent may read+write. Also:
+    #                           cd into $RUN_DIR/workspace first so qwen's cwd IS
+    #                           the project root (same reason as gemini).
+    #   --output-format stream-json : structured event stream
+    # Unlike gemini's FLAT envelope, qwen >= 0.21 emits a CLAUDE-SHAPED stream-json
+    # ({"type":"result",...,"usage":{input_tokens,output_tokens}}) — so events land
+    # in events.jsonl and the claude analyzers parse them unchanged (same trick as
+    # cursor). Tool names are still gemini snake_case (write_file / replace /
+    # run_shell_command), which analyze_edits.py's DEFAULT_TOOL_ALIASES already maps.
+    # System prompt is appended to the user prompt (no --append-system-prompt).
+    export OPENAI_BASE_URL="${OPENAI_BASE_URL:-http://127.0.0.1:8000/v1}"
+    export OPENAI_API_KEY="${OPENAI_API_KEY:-EMPTY}"
+    export OPENAI_MODEL="${OPENAI_MODEL:-$MODEL}"
+    # The headless yolo banner is expected here; keep it out of the event stream.
+    export QWEN_CODE_SUPPRESS_YOLO_WARNING=1
+    # qwen-code aborts a response if its stream goes idle (default 240s). That
+    # default assumes a cloud endpoint; a self-hosted model can legitimately go
+    # quiet far longer — a sibling request prefilling a 100k+ token context
+    # stalls this one's decode, and the run dies mid-build with a partial
+    # workspace while still reporting is_error=false. 30 min is generous enough
+    # to never fire on a healthy local run, while still catching a true hang
+    # (0 would disable the guard entirely).
+    export QWEN_STREAM_IDLE_TIMEOUT_MS="${QWEN_STREAM_IDLE_TIMEOUT_MS:-1800000}"
+    # Second, independent guard: a cap on TOTAL stream lifetime (default 900s).
+    # A single long generation — the agent emitting a few thousand lines of code
+    # in one turn — blows past 15 min once several lanes share the GPU, and the
+    # run dies with a workspace that has nothing written to it yet while still
+    # reporting is_error=false. Both guards must be raised; raising only the idle
+    # one leaves this failure mode wide open.
+    export QWEN_STREAM_MAX_LIFETIME_MS="${QWEN_STREAM_MAX_LIFETIME_MS:-5400000}"
+    echo "[run_eval] qwen: endpoint $OPENAI_BASE_URL  model $OPENAI_MODEL" >&2
+    COMBINED_PROMPT="$(cat "$RUNTIME_PROMPT")
+
+---
+
+$USER_PROMPT"
+    ( cd "$RUN_DIR/workspace" && "$BIN" \
+        --auth-type openai \
+        --model "$MODEL" \
+        --yolo \
+        --include-directories "$RUN_DIR/inputs,$RUN_DIR/workspace" \
+        --output-format stream-json \
+        --prompt "$COMBINED_PROMPT" \
+        2>"$RUN_DIR/logs/qwen.log" ) \
+      | python3 -u "$TOOLS_DIR/tee_jsonl.py" "$EVENTS_PATH"
+    EXIT=${PIPESTATUS[0]}
+    ;;
   antigravity)
     # Antigravity CLI (`agy`) flags — Claude-Code-like surface, but the
     # non-interactive `--print` mode streams PLAIN-TEXT agent narration to
@@ -1116,9 +1224,9 @@ fi
 
 # Post-run analysis: structured event streams are post-processed into
 # summaries and edit profiles where supported.
-if [[ "$CLI" == "claude" || "$CLI" == "cursor" ]]; then
-  # cursor-agent emits a Claude-shaped stream-json envelope into the same
-  # events.jsonl, so the claude analyzers work unchanged.
+if [[ "$CLI" == "claude" || "$CLI" == "cursor" || "$CLI" == "qwen" ]]; then
+  # cursor-agent and qwen-code both emit a Claude-shaped stream-json envelope
+  # into the same events.jsonl, so the claude analyzers work unchanged.
   python3 "$TOOLS_DIR/analyze_run.py"   "$RUN_DIR" \
     || echo "(analyze_run.py failed; events.jsonl is intact)"
   python3 "$TOOLS_DIR/analyze_edits.py" "$RUN_DIR" \
@@ -1208,6 +1316,14 @@ case "$CLI" in
   gemini)
     echo "  events (raw):   $RUN_DIR/logs/gemini_events.jsonl"
     echo "  stderr:         $RUN_DIR/logs/gemini.log"
+    echo "  edit profile:   $RUN_DIR/logs/edits.md  (+ edits.jsonl)"
+    ;;
+  qwen)
+    echo "  events (raw):   $EVENTS_PATH"
+    echo "  stderr:         $RUN_DIR/logs/qwen.log"
+    echo "  summary:        $RUN_DIR/logs/summary.md"
+    echo "  turn-by-turn:   $RUN_DIR/logs/turns.csv"
+    echo "  transcript:     $RUN_DIR/logs/transcript.md"
     echo "  edit profile:   $RUN_DIR/logs/edits.md  (+ edits.jsonl)"
     ;;
   antigravity)
